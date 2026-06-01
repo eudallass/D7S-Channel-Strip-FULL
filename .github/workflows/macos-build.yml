@@ -15,6 +15,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Clean build folder
+        run: rm -rf build
+
       - name: Configure ARM64
         run: cmake -B build -S . -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_BUILD_TYPE=Release
 
