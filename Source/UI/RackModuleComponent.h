@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <juce_gui_basics/juce_gui_basics.h>
 
 class RackModuleComponent : public juce::Component
@@ -10,6 +11,19 @@ public:
     {
     }
 
+    void setEnabledState (bool shouldBeEnabled)
+    {
+        enabled = shouldBeEnabled;
+        repaint();
+    }
+
+    bool isEnabledState() const
+    {
+        return enabled;
+    }
+
+    std::function<void(bool)> onEnabledChanged;
+
     void paint (juce::Graphics& g) override
     {
         auto area = getLocalBounds().toFloat();
@@ -17,21 +31,21 @@ public:
         g.setColour (juce::Colour (45, 45, 45));
         g.fillRoundedRectangle (area.reduced (1.0f), 8.0f);
 
-        g.setColour (bypassed ? juce::Colours::darkred : juce::Colours::silver);
+        g.setColour (enabled ? juce::Colours::silver : juce::Colours::darkred);
         g.drawRoundedRectangle (area.reduced (1.0f), 8.0f, 2.0f);
 
-        g.setColour (juce::Colours::white);
+        g.setColour (enabled ? juce::Colours::white : juce::Colours::grey);
         g.setFont (22.0f);
         g.drawText (name, getLocalBounds().reduced (20, 0), juce::Justification::centredLeft);
 
         auto buttonArea = getLocalBounds().removeFromRight (110).reduced (20, 18);
 
-        g.setColour (bypassed ? juce::Colours::darkred : juce::Colour (25, 90, 45));
+        g.setColour (enabled ? juce::Colour (25, 90, 45) : juce::Colours::darkred);
         g.fillRoundedRectangle (buttonArea.toFloat(), 6.0f);
 
         g.setColour (juce::Colours::white);
         g.setFont (14.0f);
-        g.drawText (bypassed ? "BYPASS" : "ACTIVE", buttonArea, juce::Justification::centred);
+        g.drawText (enabled ? "ACTIVE" : "BYPASS", buttonArea, juce::Justification::centred);
     }
 
     void mouseDown (const juce::MouseEvent& event) override
@@ -40,12 +54,16 @@ public:
 
         if (buttonArea.contains (event.getPosition()))
         {
-            bypassed = ! bypassed;
+            enabled = ! enabled;
+
+            if (onEnabledChanged)
+                onEnabledChanged (enabled);
+
             repaint();
         }
     }
 
 private:
     juce::String name;
-    bool bypassed = false;
+    bool enabled = true;
 };
