@@ -1,0 +1,16 @@
+build/
+.vscode/
+.DS_Store
+
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+
+*.vst3
+*.component
+
+JUCE/examples
+JUCE/docs
