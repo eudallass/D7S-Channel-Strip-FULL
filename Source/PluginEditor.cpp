@@ -3,6 +3,13 @@
 D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor (D7SChannelStripFullAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
+    addAndMakeVisible (noiseGate);
+    addAndMakeVisible (eq4k);
+    addAndMakeVisible (comp76);
+    addAndMakeVisible (comp2a);
+    addAndMakeVisible (tube);
+    addAndMakeVisible (esser);
+
     setSize (900, 600);
 }
 
@@ -21,41 +28,30 @@ void D7SChannelStripFullAudioProcessorEditor::paint (juce::Graphics& g)
                 0, 10,
                 getWidth(), 40,
                 juce::Justification::centred);
-
-    const char* modules[] =
-    {
-        "D7S NoiseGT1",
-        "D7S EQ 4K",
-        "D7S 76",
-        "D7S 2A",
-        "D7S Tube",
-        "D7S Esser"
-    };
-
-    int y = 70;
-
-    for (auto* module : modules)
-    {
-        g.setColour (juce::Colour (45, 45, 45));
-        g.fillRoundedRectangle (20.0f, (float) y, 860.0f, 70.0f, 8.0f);
-
-        g.setColour (juce::Colours::silver);
-        g.drawRoundedRectangle (20.0f, (float) y, 860.0f, 70.0f, 8.0f, 2.0f);
-
-        g.setColour (juce::Colours::white);
-        g.setFont (22.0f);
-
-        g.drawText (module,
-                    40,
-                    y,
-                    400,
-                    70,
-                    juce::Justification::centredLeft);
-
-        y += 85;
-    }
 }
 
 void D7SChannelStripFullAudioProcessorEditor::resized()
 {
+    auto area = getLocalBounds().reduced (20);
+    area.removeFromTop (50);
+
+    const int moduleHeight = 70;
+    const int spacing = 15;
+
+    noiseGate.setBounds (area.removeFromTop (moduleHeight));
+    area.removeFromTop (spacing);
+
+    eq4k.setBounds (area.removeFromTop (moduleHeight));
+    area.removeFromTop (spacing);
+
+    comp76.setBounds (area.removeFromTop (moduleHeight));
+    area.removeFromTop (spacing);
+
+    comp2a.setBounds (area.removeFromTop (moduleHeight));
+    area.removeFromTop (spacing);
+
+    tube.setBounds (area.removeFromTop (moduleHeight));
+    area.removeFromTop (spacing);
+
+    esser.setBounds (area.removeFromTop (moduleHeight));
 }
