@@ -33,8 +33,14 @@ void D7SChannelStripFullAudioProcessor::releaseResources() {}
 
 bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::mono()
-        || layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
+    auto input  = layouts.getMainInputChannelSet();
+    auto output = layouts.getMainOutputChannelSet();
+
+    if (input != output)
+        return false;
+
+    return output == juce::AudioChannelSet::mono()
+        || output == juce::AudioChannelSet::stereo();
 }
 
 void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)

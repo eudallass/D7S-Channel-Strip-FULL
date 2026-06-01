@@ -14,8 +14,12 @@ juce_add_plugin(D7SChannelStripFull
     PLUGIN_CODE D7sf
     FORMATS VST3 Standalone
     PRODUCT_NAME "D7S Channel Strip FULL"
-    VST3_AUTO_MANIFEST TRUE
+    PLUGIN_CATEGORY "Fx"
+    IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    VST3_AUTO_MANIFEST TRUE
 )
 
 target_sources(D7SChannelStripFull
