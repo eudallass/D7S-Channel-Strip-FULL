@@ -36,6 +36,10 @@ bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayou
     auto input  = layouts.getMainInputChannelSet();
     auto output = layouts.getMainOutputChannelSet();
 
+    if (input == juce::AudioChannelSet::disabled()
+        && output == juce::AudioChannelSet::disabled())
+        return true;
+
     if (input != output)
         return false;
 
