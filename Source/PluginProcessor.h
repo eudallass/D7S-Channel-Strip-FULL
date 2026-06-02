@@ -8,6 +8,8 @@
 class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
 {
 public:
+    static constexpr int numSpectrumBins = 16;
+
     D7SChannelStripFullAudioProcessor();
     ~D7SChannelStripFullAudioProcessor() override;
 
@@ -50,6 +52,7 @@ public:
     float getComp76GainReductionDb() const noexcept { return comp76GainReductionDb.load(); }
     float getComp2AGainReductionDb() const noexcept { return comp2aGainReductionDb.load(); }
     float getEsserGainReductionDb() const noexcept { return esserGainReductionDb.load(); }
+    float getSpectrumBinDb (int index) const noexcept;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -82,6 +85,9 @@ private:
 
     std::array<double, 8> esserLp  {};
     std::array<double, 8> esserEnv {};
+
+    std::array<double, numSpectrumBins> spectrumEnergy {};
+    std::array<std::atomic<float>, numSpectrumBins> spectrumBinsDb {};
 
     std::atomic<float> rackInputPeakDb  { -120.0f };
     std::atomic<float> rackOutputPeakDb { -120.0f };
