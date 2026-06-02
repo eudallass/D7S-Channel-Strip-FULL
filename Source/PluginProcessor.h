@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
+#include <atomic>
 #include "Modules/NoiseGT1Processor.h"
 
 class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
@@ -43,6 +44,13 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
 
+    float getRackInputPeakDb() const noexcept  { return rackInputPeakDb.load(); }
+    float getRackOutputPeakDb() const noexcept { return rackOutputPeakDb.load(); }
+    float getNoiseGT1GainReductionDb() const noexcept { return noiseGT1.getGainReductionDb(); }
+    float getComp76GainReductionDb() const noexcept { return comp76GainReductionDb.load(); }
+    float getComp2AGainReductionDb() const noexcept { return comp2aGainReductionDb.load(); }
+    float getEsserGainReductionDb() const noexcept { return esserGainReductionDb.load(); }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -57,17 +65,29 @@ private:
 
     double currentSampleRate { 44100.0 };
 
-    std::array<double, 8> eqLp100  {};
-    std::array<double, 8> eqLp500  {};
-    std::array<double, 8> eqLp1500 {};
-    std::array<double, 8> eqLp3000 {};
-    std::array<double, 8> eqLp6000 {};
+    std::array<double, 8> eqHpfState {};
+    std::array<double, 8> eqLpfState {};
+    std::array<double, 8> eqLfState  {};
+    std::array<double, 8> eqLmfLow   {};
+    std::array<double, 8> eqLmfHigh  {};
+    std::array<double, 8> eqHmfLow   {};
+    std::array<double, 8> eqHmfHigh  {};
+    std::array<double, 8> eqHfState  {};
 
     std::array<double, 8> comp76Env {};
     std::array<double, 8> comp2aEnv {};
 
+    std::array<double, 8> tubeBeautyState {};
+    std::array<double, 8> tubeBeastState  {};
+
     std::array<double, 8> esserLp  {};
     std::array<double, 8> esserEnv {};
+
+    std::atomic<float> rackInputPeakDb  { -120.0f };
+    std::atomic<float> rackOutputPeakDb { -120.0f };
+    std::atomic<float> comp76GainReductionDb { 0.0f };
+    std::atomic<float> comp2aGainReductionDb { 0.0f };
+    std::atomic<float> esserGainReductionDb  { 0.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (D7SChannelStripFullAudioProcessor)
 };
