@@ -3,8 +3,8 @@
 
 D7SChannelStripFullAudioProcessor::D7SChannelStripFullAudioProcessor()
     : AudioProcessor (BusesProperties()
-        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-        .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+        .withInput  ("Input",  juce::AudioChannelSet::stereo(), false)
+        .withOutput ("Output", juce::AudioChannelSet::stereo(), false))
 {
 }
 
@@ -39,6 +39,13 @@ bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayou
     if (input == juce::AudioChannelSet::disabled()
         && output == juce::AudioChannelSet::disabled())
         return true;
+
+    if (output == juce::AudioChannelSet::disabled())
+        return input == juce::AudioChannelSet::disabled();
+
+    if (input == juce::AudioChannelSet::disabled())
+        return output == juce::AudioChannelSet::mono()
+            || output == juce::AudioChannelSet::stereo();
 
     if (input != output)
         return false;
