@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "UI/RackModuleComponent.h"
 
@@ -14,6 +15,11 @@ public:
     void resized() override;
 
 private:
+    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+
+    void updateNoiseGT1VisualState();
+
     D7SChannelStripFullAudioProcessor& audioProcessor;
 
     RackModuleComponent noiseGate { "D7S NoiseGT1" };
@@ -22,6 +28,13 @@ private:
     RackModuleComponent comp2a    { "D7S 2A" };
     RackModuleComponent tube      { "D7S Tube" };
     RackModuleComponent esser     { "D7S Esser" };
+
+    juce::Label noiseSuppressionLabel;
+    juce::Slider noiseSuppressionSlider;
+    juce::ToggleButton noiseBypassButton;
+
+    std::unique_ptr<SliderAttachment> noiseSuppressionAttachment;
+    std::unique_ptr<ButtonAttachment> noiseBypassAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (D7SChannelStripFullAudioProcessorEditor)
 };
