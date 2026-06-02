@@ -38,6 +38,14 @@ namespace
     {
         return juce::Decibels::gainToDecibels (juce::jmax (value, 1.0e-9));
     }
+
+    static double spectrumFrequencyForIndex (int index)
+    {
+        const double minHz = 30.0;
+        const double maxHz = 20000.0;
+        const double normalised = (double) index / (double) D7SChannelStripFullAudioProcessor::numSpectrumBins;
+        return minHz * std::pow (maxHz / minHz, normalised);
+    }
 }
 
 D7SChannelStripFullAudioProcessor::D7SChannelStripFullAudioProcessor()
@@ -95,10 +103,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_beauty", 1 }, "Tube Beauty", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_beast", 1 }, "Tube Beast", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_sensitivity", 1 }, "Tube Sensitivity", juce::NormalisableRange<float> (0.0f, 100.0f), 50.0f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_mix", 1 }, "Tube Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 100.0f));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "tube_bypass", 1 }, "Tube Bypass", true));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_threshold", 1 }, "Esser Threshold", juce::NormalisableRange<float> (-60.0f, 0.0f), -24.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_freq", 1 }, "Esser Frequency", juce::NormalisableRange<float> (2000.0f, 16000.0f), 7000.0f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_freq", 1 }, "Esser Frequency", juce::NormalisableRange<float> (500.0f, 20000.0f), 7000.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_range", 1 }, "Esser Range", juce::NormalisableRange<float> (0.0f, 24.0f), 12.0f));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "esser_mode", 1 }, "Esser Mode", juce::StringArray { "Wide", "Split" }, 1));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "esser_bypass", 1 }, "Esser Bypass", true));
@@ -117,6 +126,13 @@ int D7SChannelStripFullAudioProcessor::getCurrentProgram() { return 0; }
 void D7SChannelStripFullAudioProcessor::setCurrentProgram (int) {}
 const juce::String D7SChannelStripFullAudioProcessor::getProgramName (int) { return {}; }
 void D7SChannelStripFullAudioProcessor::changeProgramName (int, const juce::String&) {}
+
+float D7SChannelStripFullAudioProcessor::getSpectrumBinDb (int index) const noexcept
+{
+    if (index < 0 || index >= numSpectrumBins)
+        return -120.0f;
+    return spectrumBinsDb[(size_t) index].load();
+}
 
 void D7SChannelStripFullAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
@@ -137,8 +153,11 @@ void D7SChannelStripFullAudioProcessor::resetInternalStates()
     eqLmfLow.fill (0.0); eqLmfHigh.fill (0.0); eqHmfLow.fill (0.0); eqHmfHigh.fill (0.0); eqHfState.fill (0.0);
     comp76Env.fill (0.0); comp2aEnv.fill (0.0); tubeBeautyState.fill (0.0); tubeBeastState.fill (0.0);
     esserLp.fill (0.0); esserEnv.fill (0.0);
+    spectrumLp.fill (0.0); spectrumEnergy.fill (0.0);
     rackInputPeakDb.store (-120.0f); rackOutputPeakDb.store (-120.0f);
     comp76GainReductionDb.store (0.0f); comp2aGainReductionDb.store (0.0f); esserGainReductionDb.store (0.0f);
+    for (auto& bin : spectrumBinsDb)
+        bin.store (-120.0f);
 }
 
 bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -227,6 +246,7 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
     const double beauty = getParam (apvts, "tube_beauty") / 100.0;
     const double beast = getParam (apvts, "tube_beast") / 100.0;
     const double sens = juce::Decibels::decibelsToGain (-12.0 + getParam (apvts, "tube_sensitivity") * 0.24);
+    const double tubeMix = getParam (apvts, "tube_mix", 100.0f) / 100.0;
     const double beautyCoeff = onePoleCoeff (2500.0, currentSampleRate);
     const double beastCoeff = onePoleCoeff (220.0, currentSampleRate);
 
@@ -307,6 +327,7 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
 
             if (tubeOn)
             {
+                const double dryTube = x;
                 double driven = x * sens;
                 tubeBeautyState[ch] += beautyCoeff * (driven - tubeBeautyState[ch]);
                 tubeBeastState[ch] += beastCoeff * (driven - tubeBeastState[ch]);
@@ -314,8 +335,9 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
                 const double beastBand = tubeBeastState[ch];
                 const double beautyWet = std::tanh (beautyBand * (1.0 + beauty * 5.0));
                 const double beastWet = std::tanh (beastBand * (1.0 + beast * 12.0));
-                x += beautyWet * beauty * 0.45 + beastWet * beast * 0.65;
-                x *= juce::Decibels::decibelsToGain (-(beauty * 1.5 + beast * 3.0));
+                double wetTube = driven + beautyWet * beauty * 0.45 + beastWet * beast * 0.65;
+                wetTube *= juce::Decibels::decibelsToGain (-(beauty * 1.5 + beast * 3.0));
+                x = dryTube * (1.0 - tubeMix) + wetTube * tubeMix;
             }
 
             if (esserOn)
@@ -335,6 +357,17 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
             x = rackDry * (1.0 - rackMix) + x * rackMix;
             x *= rackOut;
             outputPeak = juce::jmax (outputPeak, std::abs (x));
+
+            double previousLow = 0.0;
+            for (int bin = 0; bin < numSpectrumBins; ++bin)
+            {
+                const double coeff = onePoleCoeff (spectrumFrequencyForIndex (bin + 1), currentSampleRate);
+                spectrumLp[(size_t) bin] += coeff * (x - spectrumLp[(size_t) bin]);
+                const double band = spectrumLp[(size_t) bin] - previousLow;
+                previousLow = spectrumLp[(size_t) bin];
+                spectrumEnergy[(size_t) bin] += 0.002 * ((band * band) - spectrumEnergy[(size_t) bin]);
+            }
+
             data[i] = (FloatType) juce::jlimit (-4.0, 4.0, x);
         }
     }
@@ -344,6 +377,9 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
     comp76GainReductionDb.store ((float) max76Gr);
     comp2aGainReductionDb.store ((float) max2aGr);
     esserGainReductionDb.store ((float) maxEsserGr);
+
+    for (int bin = 0; bin < numSpectrumBins; ++bin)
+        spectrumBinsDb[(size_t) bin].store ((float) peakDbFromLinear (std::sqrt (juce::jmax (spectrumEnergy[(size_t) bin], 1.0e-12))));
 }
 
 void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { processAudioBlock (buffer); }
