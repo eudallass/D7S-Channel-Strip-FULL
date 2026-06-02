@@ -18,7 +18,18 @@ private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
-    void updateNoiseGT1VisualState();
+    struct ParamSlider
+    {
+        juce::Label label;
+        juce::Slider slider;
+        std::unique_ptr<SliderAttachment> attachment;
+    };
+
+    void setupSlider (ParamSlider& control, const juce::String& labelText, const juce::String& paramID);
+    void setupBypassButton (juce::ToggleButton& button, const juce::String& text, const juce::String& paramID, std::unique_ptr<ButtonAttachment>& attachment);
+    void connectRackButton (RackModuleComponent& module, const juce::String& bypassParamID);
+    void syncRackVisuals();
+    void layoutModuleControls (juce::Rectangle<int>& area, RackModuleComponent& module, std::initializer_list<ParamSlider*> sliders, juce::ToggleButton& bypassButton);
 
     D7SChannelStripFullAudioProcessor& audioProcessor;
 
@@ -29,12 +40,38 @@ private:
     RackModuleComponent tube      { "D7S Tube" };
     RackModuleComponent esser     { "D7S Esser" };
 
-    juce::Label noiseSuppressionLabel;
-    juce::Slider noiseSuppressionSlider;
+    ParamSlider noiseSuppression;
     juce::ToggleButton noiseBypassButton;
-
-    std::unique_ptr<SliderAttachment> noiseSuppressionAttachment;
     std::unique_ptr<ButtonAttachment> noiseBypassAttachment;
+
+    ParamSlider eqLow;
+    ParamSlider eqLowMid;
+    ParamSlider eqPresence;
+    ParamSlider eqAir;
+    juce::ToggleButton eqBypassButton;
+    std::unique_ptr<ButtonAttachment> eqBypassAttachment;
+
+    ParamSlider comp76Input;
+    ParamSlider comp76Attack;
+    ParamSlider comp76Release;
+    ParamSlider comp76Output;
+    juce::ToggleButton comp76BypassButton;
+    std::unique_ptr<ButtonAttachment> comp76BypassAttachment;
+
+    ParamSlider comp2aPeak;
+    ParamSlider comp2aGain;
+    juce::ToggleButton comp2aBypassButton;
+    std::unique_ptr<ButtonAttachment> comp2aBypassAttachment;
+
+    ParamSlider tubeDrive;
+    ParamSlider tubeTone;
+    juce::ToggleButton tubeBypassButton;
+    std::unique_ptr<ButtonAttachment> tubeBypassAttachment;
+
+    ParamSlider esserFreq;
+    ParamSlider esserAmount;
+    juce::ToggleButton esserBypassButton;
+    std::unique_ptr<ButtonAttachment> esserBypassAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (D7SChannelStripFullAudioProcessorEditor)
 };
