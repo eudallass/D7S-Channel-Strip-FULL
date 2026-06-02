@@ -34,11 +34,7 @@ juce::AudioProcessorParameter* D7SChannelStripFullAudioProcessor::getBypassParam
     return apvts.getParameter ("master_bypass");
 }
 
-const juce::String D7SChannelStripFullAudioProcessor::getName() const
-{
-    return JucePlugin_Name;
-}
-
+const juce::String D7SChannelStripFullAudioProcessor::getName() const { return JucePlugin_Name; }
 bool D7SChannelStripFullAudioProcessor::acceptsMidi() const { return false; }
 bool D7SChannelStripFullAudioProcessor::producesMidi() const { return false; }
 bool D7SChannelStripFullAudioProcessor::isMidiEffect() const { return false; }
@@ -55,18 +51,20 @@ void D7SChannelStripFullAudioProcessor::releaseResources() {}
 
 bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    const auto input  = layouts.getMainInputChannelSet();
-    const auto output = layouts.getMainOutputChannelSet();
+    const auto in  = layouts.getMainInputChannelSet();
+    const auto out = layouts.getMainOutputChannelSet();
 
-    if (input == juce::AudioChannelSet::disabled()
-        && output == juce::AudioChannelSet::disabled())
+    const bool inDisabled  = (in  == juce::AudioChannelSet::disabled());
+    const bool outDisabled = (out == juce::AudioChannelSet::disabled());
+
+    if (inDisabled || outDisabled)
         return true;
 
-    if (input != output)
+    if (in != out)
         return false;
 
-    return output == juce::AudioChannelSet::mono()
-        || output == juce::AudioChannelSet::stereo();
+    return out == juce::AudioChannelSet::mono()
+        || out == juce::AudioChannelSet::stereo();
 }
 
 void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -80,7 +78,6 @@ void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<float>& 
         buffer.clear (channel, 0, buffer.getNumSamples());
 
     auto* masterBypass = apvts.getRawParameterValue ("master_bypass");
-
     if (masterBypass != nullptr && masterBypass->load() > 0.5f)
         return;
 }
@@ -96,13 +93,11 @@ void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<double>&
         buffer.clear (channel, 0, buffer.getNumSamples());
 
     auto* masterBypass = apvts.getRawParameterValue ("master_bypass");
-
     if (masterBypass != nullptr && masterBypass->load() > 0.5f)
         return;
 }
 
 bool D7SChannelStripFullAudioProcessor::hasEditor() const { return true; }
-
 juce::AudioProcessorEditor* D7SChannelStripFullAudioProcessor::createEditor()
 {
     return new D7SChannelStripFullAudioProcessorEditor (*this);
@@ -112,7 +107,6 @@ void D7SChannelStripFullAudioProcessor::getStateInformation (juce::MemoryBlock& 
 {
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
-
     if (xml != nullptr)
         copyXmlToBinary (*xml, destData);
 }
@@ -120,11 +114,9 @@ void D7SChannelStripFullAudioProcessor::getStateInformation (juce::MemoryBlock& 
 void D7SChannelStripFullAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
-
     if (xmlState != nullptr)
     {
         auto state = juce::ValueTree::fromXml (*xmlState);
-
         if (state.isValid())
             apvts.replaceState (state);
     }
