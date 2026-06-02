@@ -34,6 +34,9 @@ private:
         std::unique_ptr<ComboBoxAttachment> attachment;
     };
 
+    void setUIScale (float newScale);
+    void updateScaleButtonStates();
+
     void setupSlider (ParamSlider& control, const juce::String& labelText, const juce::String& paramID);
     void setupChoice (ParamChoice& control, const juce::String& labelText, const juce::String& paramID, const juce::StringArray& items);
     void setupBypassButton (juce::ToggleButton& button, const juce::String& text, const juce::String& paramID, std::unique_ptr<ButtonAttachment>& attachment);
@@ -48,6 +51,13 @@ private:
                                juce::ToggleButton& bypassButton);
 
     D7SChannelStripFullAudioProcessor& audioProcessor;
+
+    float uiScale { 0.75f };
+    juce::Component content;
+    juce::TextButton scale100Button { "100%" };
+    juce::TextButton scale75Button  { "75%" };
+    juce::TextButton scale50Button  { "50%" };
+    juce::TextButton scale25Button  { "25%" };
 
     RackModuleComponent noiseGate { "D7S NoiseGT1" };
     RackModuleComponent eq4k      { "D7S EQ 4K" };
