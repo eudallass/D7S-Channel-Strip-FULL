@@ -86,6 +86,7 @@ private:
     std::array<double, 8> esserLp  {};
     std::array<double, 8> esserEnv {};
 
+    std::array<double, numSpectrumBins + 1> spectrumLp {};
     std::array<double, numSpectrumBins> spectrumEnergy {};
     std::array<std::atomic<float>, numSpectrumBins> spectrumBinsDb {};
 
