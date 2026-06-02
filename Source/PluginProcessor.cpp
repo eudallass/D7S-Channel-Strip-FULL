@@ -26,6 +26,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
             .withMeta (true)
     ));
 
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { "noisegt1_suppression", 1 },
+        "NoiseGT1 Suppression",
+        juce::NormalisableRange<float> (0.0f, 1.0f),
+        0.5f
+    ));
+
+    params.push_back (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { "noisegt1_bypass", 1 },
+        "NoiseGT1 Bypass",
+        false
+    ));
+
     return { params.begin(), params.end() };
 }
 
@@ -46,8 +59,14 @@ void D7SChannelStripFullAudioProcessor::setCurrentProgram (int) {}
 const juce::String D7SChannelStripFullAudioProcessor::getProgramName (int) { return {}; }
 void D7SChannelStripFullAudioProcessor::changeProgramName (int, const juce::String&) {}
 
-void D7SChannelStripFullAudioProcessor::prepareToPlay (double, int) {}
-void D7SChannelStripFullAudioProcessor::releaseResources() {}
+void D7SChannelStripFullAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+{
+    noiseGT1.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
+}
+void D7SChannelStripFullAudioProcessor::releaseResources()
+{
+    noiseGT1.reset();
+}
 
 bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
@@ -80,6 +99,13 @@ void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<float>& 
     auto* masterBypass = apvts.getRawParameterValue ("master_bypass");
     if (masterBypass != nullptr && masterBypass->load() > 0.5f)
         return;
+
+    // NoiseGT1
+    auto* suppression = apvts.getRawParameterValue ("noisegt1_suppression");
+    auto* noiseBypass = apvts.getRawParameterValue ("noisegt1_bypass");
+    if (suppression != nullptr) noiseGT1.setSuppressionAmount (suppression->load());
+    if (noiseBypass != nullptr) noiseGT1.setBypass (noiseBypass->load() > 0.5f);
+    noiseGT1.process (buffer);
 }
 
 void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&)
@@ -95,6 +121,13 @@ void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<double>&
     auto* masterBypass = apvts.getRawParameterValue ("master_bypass");
     if (masterBypass != nullptr && masterBypass->load() > 0.5f)
         return;
+
+    // NoiseGT1
+    auto* suppression = apvts.getRawParameterValue ("noisegt1_suppression");
+    auto* noiseBypass = apvts.getRawParameterValue ("noisegt1_bypass");
+    if (suppression != nullptr) noiseGT1.setSuppressionAmount (suppression->load());
+    if (noiseBypass != nullptr) noiseGT1.setBypass (noiseBypass->load() > 0.5f);
+    noiseGT1.process (buffer);
 }
 
 bool D7SChannelStripFullAudioProcessor::hasEditor() const { return true; }

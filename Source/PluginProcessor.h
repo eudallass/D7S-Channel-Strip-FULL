@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "Modules/NoiseGT1Processor.h"
 
 class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
 {
@@ -45,6 +46,8 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     juce::AudioProcessorValueTreeState apvts;
+
+    NoiseGT1Processor noiseGT1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (D7SChannelStripFullAudioProcessor)
 };

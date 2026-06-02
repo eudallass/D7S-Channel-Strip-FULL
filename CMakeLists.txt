@@ -29,6 +29,7 @@ target_sources(D7SChannelStripFull
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
+        Source/Modules/NoiseGT1Processor.cpp
 )
 
 target_compile_definitions(D7SChannelStripFull
@@ -43,6 +44,7 @@ target_compile_definitions(D7SChannelStripFull
 target_link_libraries(D7SChannelStripFull
     PRIVATE
         juce::juce_audio_utils
+        juce::juce_dsp
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
