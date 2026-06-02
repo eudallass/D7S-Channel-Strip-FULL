@@ -4,12 +4,26 @@
 D7SChannelStripFullAudioProcessor::D7SChannelStripFullAudioProcessor()
     : AudioProcessor (BusesProperties()
         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-        .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      apvts (*this, nullptr, "D7S_PARAMETERS", createParameterLayout())
 {
 }
 
 D7SChannelStripFullAudioProcessor::~D7SChannelStripFullAudioProcessor()
 {
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    params.push_back (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { "master_bypass", 1 },
+        "Master Bypass",
+        false
+    ));
+
+    return { params.begin(), params.end() };
 }
 
 const juce::String D7SChannelStripFullAudioProcessor::getName() const
@@ -28,49 +42,76 @@ void D7SChannelStripFullAudioProcessor::setCurrentProgram (int) {}
 const juce::String D7SChannelStripFullAudioProcessor::getProgramName (int) { return {}; }
 void D7SChannelStripFullAudioProcessor::changeProgramName (int, const juce::String&) {}
 
-void D7SChannelStripFullAudioProcessor::prepareToPlay (double, int) {}
-void D7SChannelStripFullAudioProcessor::releaseResources() {}
+void D7SChannelStripFullAudioProcessor::prepareToPlay (double, int)
+{
+}
+
+void D7SChannelStripFullAudioProcessor::releaseResources()
+{
+}
 
 bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    auto input  = layouts.getMainInputChannelSet();
-    auto output = layouts.getMainOutputChannelSet();
+    const auto& mainInput  = layouts.getMainInputChannelSet();
+    const auto& mainOutput = layouts.getMainOutputChannelSet();
 
-    if (input == juce::AudioChannelSet::disabled()
-        && output == juce::AudioChannelSet::disabled())
+    if (mainInput == juce::AudioChannelSet::disabled()
+        && mainOutput == juce::AudioChannelSet::disabled())
         return true;
 
-    if (output == juce::AudioChannelSet::disabled())
-        return input == juce::AudioChannelSet::disabled();
-
-    if (input == juce::AudioChannelSet::disabled())
-        return output == juce::AudioChannelSet::mono()
-            || output == juce::AudioChannelSet::stereo();
-
-    if (input != output)
+    if (mainOutput != juce::AudioChannelSet::mono()
+        && mainOutput != juce::AudioChannelSet::stereo())
         return false;
 
-    return output == juce::AudioChannelSet::mono()
-        || output == juce::AudioChannelSet::stereo();
+    if (mainInput != mainOutput)
+        return false;
+
+    return true;
 }
 
 void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    for (int i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
+    for (auto i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 }
 
-bool D7SChannelStripFullAudioProcessor::hasEditor() const { return true; }
+void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&)
+{
+    juce::ScopedNoDenormals noDenormals;
+
+    for (auto i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
+        buffer.clear (i, 0, buffer.getNumSamples());
+}
+
+bool D7SChannelStripFullAudioProcessor::hasEditor() const
+{
+    return true;
+}
 
 juce::AudioProcessorEditor* D7SChannelStripFullAudioProcessor::createEditor()
 {
     return new D7SChannelStripFullAudioProcessorEditor (*this);
 }
 
-void D7SChannelStripFullAudioProcessor::getStateInformation (juce::MemoryBlock&) {}
-void D7SChannelStripFullAudioProcessor::setStateInformation (const void*, int) {}
+void D7SChannelStripFullAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+{
+    auto state = apvts.copyState();
+    std::unique_ptr<juce::XmlElement> xml (state.createXml());
+
+    if (xml != nullptr)
+        copyXmlToBinary (*xml, destData);
+}
+
+void D7SChannelStripFullAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+{
+    std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
+
+    if (xmlState != nullptr)
+        if (xmlState->hasTagName (apvts.state.getType()))
+            apvts.replaceState (juce::ValueTree::fromXml (*xmlState));
+}
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
