@@ -30,6 +30,11 @@ jobs:
           unzip pluginval.zip -d pluginval
           chmod +x pluginval/pluginval.app/Contents/MacOS/pluginval || true
 
+      - name: Ad-hoc codesign VST3
+        run: |
+          codesign --force --deep --sign - "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
+          codesign --verify --deep --strict --verbose=4 "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
+
       - name: Validate VST3
         run: |
           pluginval/pluginval.app/Contents/MacOS/pluginval \
