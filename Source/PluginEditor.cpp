@@ -2,6 +2,9 @@
 
 namespace
 {
+    constexpr int designWidth  = 1180;
+    constexpr int designHeight = 1120;
+
     static juce::String dbText (float value)
     {
         if (value <= -119.0f)
@@ -13,24 +16,35 @@ namespace
 D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor (D7SChannelStripFullAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    addAndMakeVisible (noiseGate);
-    addAndMakeVisible (eq4k);
-    addAndMakeVisible (comp76);
-    addAndMakeVisible (comp2a);
-    addAndMakeVisible (tube);
-    addAndMakeVisible (esser);
+    addAndMakeVisible (content);
+    addAndMakeVisible (scale100Button);
+    addAndMakeVisible (scale75Button);
+    addAndMakeVisible (scale50Button);
+    addAndMakeVisible (scale25Button);
+
+    scale100Button.onClick = [this] { setUIScale (1.00f); };
+    scale75Button .onClick = [this] { setUIScale (0.75f); };
+    scale50Button .onClick = [this] { setUIScale (0.50f); };
+    scale25Button .onClick = [this] { setUIScale (0.25f); };
+
+    content.addAndMakeVisible (noiseGate);
+    content.addAndMakeVisible (eq4k);
+    content.addAndMakeVisible (comp76);
+    content.addAndMakeVisible (comp2a);
+    content.addAndMakeVisible (tube);
+    content.addAndMakeVisible (esser);
 
     setupSlider (rackInput, "Rack In", "rack_input");
     setupSlider (rackOutput, "Rack Out", "rack_output");
     setupSlider (rackMix, "Rack Mix", "rack_mix");
     rackMeterLabel.setColour (juce::Label::textColourId, juce::Colours::white);
     rackMeterLabel.setJustificationType (juce::Justification::centredLeft);
-    addAndMakeVisible (rackMeterLabel);
+    content.addAndMakeVisible (rackMeterLabel);
 
     setupSlider (noiseSuppression, "Suppression", "noisegt1_suppression");
     setupBypassButton (noiseBypassButton, "NoiseGT1 Bypass", "noisegt1_bypass", noiseBypassAttachment);
     noiseMeterLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    addAndMakeVisible (noiseMeterLabel);
+    content.addAndMakeVisible (noiseMeterLabel);
 
     setupSlider (eqHpf, "HPF", "eq4k_hpf");
     setupSlider (eqLpf, "LPF", "eq4k_lpf");
@@ -55,7 +69,7 @@ D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor
     setupChoice (comp76Ratio, "Ratio", "comp76_ratio", { "4", "8", "12", "20", "All" });
     setupBypassButton (comp76BypassButton, "76 Bypass", "comp76_bypass", comp76BypassAttachment);
     comp76MeterLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    addAndMakeVisible (comp76MeterLabel);
+    content.addAndMakeVisible (comp76MeterLabel);
 
     setupSlider (comp2aPeak, "Peak Red", "comp2a_peak");
     setupSlider (comp2aGain, "Gain", "comp2a_gain");
@@ -64,7 +78,7 @@ D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor
     setupChoice (comp2aMode, "Mode", "comp2a_mode", { "Compress", "Limit" });
     setupBypassButton (comp2aBypassButton, "2A Bypass", "comp2a_bypass", comp2aBypassAttachment);
     comp2aMeterLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    addAndMakeVisible (comp2aMeterLabel);
+    content.addAndMakeVisible (comp2aMeterLabel);
 
     setupSlider (tubeBeauty, "Beauty", "tube_beauty");
     setupSlider (tubeBeast, "Beast", "tube_beast");
@@ -77,7 +91,7 @@ D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor
     setupChoice (esserMode, "Mode", "esser_mode", { "Wide", "Split" });
     setupBypassButton (esserBypassButton, "Esser Bypass", "esser_bypass", esserBypassAttachment);
     esserMeterLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    addAndMakeVisible (esserMeterLabel);
+    content.addAndMakeVisible (esserMeterLabel);
 
     connectRackButton (noiseGate, "noisegt1_bypass");
     connectRackButton (eq4k, "eq4k_bypass");
@@ -87,9 +101,10 @@ D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor
     connectRackButton (esser, "esser_bypass");
 
     syncRackVisuals();
+    updateScaleButtonStates();
     startTimerHz (12);
 
-    setSize (1180, 1120);
+    setUIScale (0.75f);
 }
 
 D7SChannelStripFullAudioProcessorEditor::~D7SChannelStripFullAudioProcessorEditor()
@@ -97,16 +112,43 @@ D7SChannelStripFullAudioProcessorEditor::~D7SChannelStripFullAudioProcessorEdito
     stopTimer();
 }
 
+void D7SChannelStripFullAudioProcessorEditor::setUIScale (float newScale)
+{
+    uiScale = juce::jlimit (0.25f, 1.0f, newScale);
+    setSize ((int) std::round (designWidth * uiScale), (int) std::round (designHeight * uiScale) + 38);
+    updateScaleButtonStates();
+    resized();
+}
+
+void D7SChannelStripFullAudioProcessorEditor::updateScaleButtonStates()
+{
+    scale100Button.setToggleState (std::abs (uiScale - 1.00f) < 0.01f, juce::dontSendNotification);
+    scale75Button .setToggleState (std::abs (uiScale - 0.75f) < 0.01f, juce::dontSendNotification);
+    scale50Button .setToggleState (std::abs (uiScale - 0.50f) < 0.01f, juce::dontSendNotification);
+    scale25Button .setToggleState (std::abs (uiScale - 0.25f) < 0.01f, juce::dontSendNotification);
+
+    for (auto* b : { &scale100Button, &scale75Button, &scale50Button, &scale25Button })
+    {
+        b->setClickingTogglesState (false);
+        b->setColour (juce::TextButton::buttonColourId, b->getToggleState() ? juce::Colour (80, 80, 80) : juce::Colour (35, 35, 35));
+        b->setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+        b->setColour (juce::TextButton::textColourOnId, juce::Colours::white);
+    }
+}
+
 void D7SChannelStripFullAudioProcessorEditor::setupSlider (ParamSlider& control, const juce::String& labelText, const juce::String& paramID)
 {
     control.label.setText (labelText, juce::dontSendNotification);
-    control.label.setJustificationType (juce::Justification::centredRight);
+    control.label.setJustificationType (juce::Justification::centred);
     control.label.setColour (juce::Label::textColourId, juce::Colours::white);
-    addAndMakeVisible (control.label);
+    content.addAndMakeVisible (control.label);
 
-    control.slider.setSliderStyle (juce::Slider::LinearHorizontal);
-    control.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 72, 22);
-    addAndMakeVisible (control.slider);
+    control.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    control.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 72, 18);
+    control.slider.setRotaryParameters (juce::MathConstants<float>::pi * 1.20f,
+                                        juce::MathConstants<float>::pi * 2.80f,
+                                        true);
+    content.addAndMakeVisible (control.slider);
 
     control.attachment = std::make_unique<SliderAttachment> (audioProcessor.getAPVTS(), paramID, control.slider);
 }
@@ -114,12 +156,12 @@ void D7SChannelStripFullAudioProcessorEditor::setupSlider (ParamSlider& control,
 void D7SChannelStripFullAudioProcessorEditor::setupChoice (ParamChoice& control, const juce::String& labelText, const juce::String& paramID, const juce::StringArray& items)
 {
     control.label.setText (labelText, juce::dontSendNotification);
-    control.label.setJustificationType (juce::Justification::centredRight);
+    control.label.setJustificationType (juce::Justification::centred);
     control.label.setColour (juce::Label::textColourId, juce::Colours::white);
-    addAndMakeVisible (control.label);
+    content.addAndMakeVisible (control.label);
 
     control.box.addItemList (items, 1);
-    addAndMakeVisible (control.box);
+    content.addAndMakeVisible (control.box);
     control.attachment = std::make_unique<ComboBoxAttachment> (audioProcessor.getAPVTS(), paramID, control.box);
 }
 
@@ -127,7 +169,7 @@ void D7SChannelStripFullAudioProcessorEditor::setupBypassButton (juce::ToggleBut
 {
     button.setButtonText (text);
     button.setColour (juce::ToggleButton::textColourId, juce::Colours::white);
-    addAndMakeVisible (button);
+    content.addAndMakeVisible (button);
     attachment = std::make_unique<ButtonAttachment> (audioProcessor.getAPVTS(), paramID, button);
     button.onClick = [this] { syncRackVisuals(); };
 }
@@ -176,61 +218,73 @@ void D7SChannelStripFullAudioProcessorEditor::timerCallback()
 void D7SChannelStripFullAudioProcessorEditor::layoutModuleControls (juce::Rectangle<int>& area, RackModuleComponent& module, std::initializer_list<ParamSlider*> sliders, std::initializer_list<ParamChoice*> choices, juce::ToggleButton& bypassButton)
 {
     module.setBounds (area.removeFromTop (58));
-    area.removeFromTop (5);
+    area.removeFromTop (4);
 
-    auto controlsArea = area.removeFromTop (32);
+    auto controlsArea = area.removeFromTop (92);
     for (auto* control : sliders)
     {
-        auto group = controlsArea.removeFromLeft (178);
-        control->label.setBounds (group.removeFromLeft (72));
+        auto group = controlsArea.removeFromLeft (78);
+        control->label.setBounds (group.removeFromTop (18));
         control->slider.setBounds (group);
+        controlsArea.removeFromLeft (8);
     }
 
     for (auto* control : choices)
     {
-        auto group = controlsArea.removeFromLeft (155);
-        control->label.setBounds (group.removeFromLeft (55));
-        control->box.setBounds (group.reduced (0, 4));
+        auto group = controlsArea.removeFromLeft (95);
+        control->label.setBounds (group.removeFromTop (18));
+        control->box.setBounds (group.removeFromTop (24));
+        controlsArea.removeFromLeft (8);
     }
 
-    bypassButton.setBounds (controlsArea.removeFromLeft (160));
-    area.removeFromTop (10);
+    bypassButton.setBounds (controlsArea.removeFromLeft (150).withHeight (28));
+    area.removeFromTop (6);
 }
 
 void D7SChannelStripFullAudioProcessorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (20, 20, 20));
     g.setColour (juce::Colours::white);
-    g.setFont (28.0f);
-    g.drawText ("D7S CHANNEL STRIP", 0, 10, getWidth(), 40, juce::Justification::centred);
+    g.setFont (20.0f);
+    g.drawText ("D7S CHANNEL STRIP", 18, 0, 360, 36, juce::Justification::centredLeft);
+    g.setFont (13.0f);
+    g.drawText ("Scale", getWidth() - 260, 0, 54, 36, juce::Justification::centredRight);
 }
 
 void D7SChannelStripFullAudioProcessorEditor::resized()
 {
-    auto area = getLocalBounds().reduced (18);
-    area.removeFromTop (48);
+    auto top = getLocalBounds().removeFromTop (36).reduced (8, 5);
+    auto scaleArea = top.removeFromRight (200);
+    scale100Button.setBounds (scaleArea.removeFromLeft (48));
+    scale75Button .setBounds (scaleArea.removeFromLeft (48));
+    scale50Button .setBounds (scaleArea.removeFromLeft (48));
+    scale25Button .setBounds (scaleArea.removeFromLeft (48));
 
-    auto rackArea = area.removeFromTop (42);
-    rackInput.label.setBounds (rackArea.removeFromLeft (70)); rackInput.slider.setBounds (rackArea.removeFromLeft (160));
-    rackOutput.label.setBounds (rackArea.removeFromLeft (80)); rackOutput.slider.setBounds (rackArea.removeFromLeft (160));
-    rackMix.label.setBounds (rackArea.removeFromLeft (75)); rackMix.slider.setBounds (rackArea.removeFromLeft (160));
-    rackMeterLabel.setBounds (rackArea.removeFromLeft (360));
+    content.setBounds (0, 38, designWidth, designHeight);
+    content.setTransform (juce::AffineTransform::scale (uiScale));
+
+    auto area = juce::Rectangle<int> (0, 0, designWidth, designHeight).reduced (18);
+    area.removeFromTop (8);
+
+    auto rackArea = area.removeFromTop (102);
+    for (auto* control : { &rackInput, &rackOutput, &rackMix })
+    {
+        auto group = rackArea.removeFromLeft (86);
+        control->label.setBounds (group.removeFromTop (18));
+        control->slider.setBounds (group.removeFromTop (76));
+        rackArea.removeFromLeft (8);
+    }
+    rackMeterLabel.setBounds (rackArea.removeFromLeft (420).withHeight (28));
     area.removeFromTop (8);
 
     layoutModuleControls (area, noiseGate, { &noiseSuppression }, {}, noiseBypassButton);
     noiseMeterLabel.setBounds (area.removeFromTop (20)); area.removeFromTop (4);
 
-    layoutModuleControls (area, eq4k, { &eqHpf, &eqLpf, &eqLfFreq, &eqLfGain, &eqLmfFreq, &eqLmfGain }, {}, eqBypassButton);
-    auto eqRow2 = area.removeFromTop (32);
-    eqLmfQ.label.setBounds (eqRow2.removeFromLeft (70)); eqLmfQ.slider.setBounds (eqRow2.removeFromLeft (110));
-    eqHmfFreq.label.setBounds (eqRow2.removeFromLeft (80)); eqHmfFreq.slider.setBounds (eqRow2.removeFromLeft (110));
-    eqHmfGain.label.setBounds (eqRow2.removeFromLeft (80)); eqHmfGain.slider.setBounds (eqRow2.removeFromLeft (110));
-    eqHmfQ.label.setBounds (eqRow2.removeFromLeft (70)); eqHmfQ.slider.setBounds (eqRow2.removeFromLeft (110));
-    eqHfFreq.label.setBounds (eqRow2.removeFromLeft (80)); eqHfFreq.slider.setBounds (eqRow2.removeFromLeft (110));
-    eqHfGain.label.setBounds (eqRow2.removeFromLeft (80)); eqHfGain.slider.setBounds (eqRow2.removeFromLeft (110));
-    eqLfBellButton.setBounds (eqRow2.removeFromLeft (90));
-    eqHfBellButton.setBounds (eqRow2.removeFromLeft (90));
-    area.removeFromTop (8);
+    layoutModuleControls (area, eq4k, { &eqHpf, &eqLpf, &eqLfFreq, &eqLfGain, &eqLmfFreq, &eqLmfGain, &eqLmfQ, &eqHmfFreq, &eqHmfGain, &eqHmfQ, &eqHfFreq, &eqHfGain }, {}, eqBypassButton);
+    auto eqButtons = area.removeFromTop (30);
+    eqLfBellButton.setBounds (eqButtons.removeFromLeft (110));
+    eqHfBellButton.setBounds (eqButtons.removeFromLeft (110));
+    area.removeFromTop (6);
 
     layoutModuleControls (area, comp76, { &comp76Input, &comp76Output, &comp76Attack, &comp76Release }, { &comp76Ratio }, comp76BypassButton);
     comp76MeterLabel.setBounds (area.removeFromTop (20)); area.removeFromTop (4);
