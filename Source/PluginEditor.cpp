@@ -2,8 +2,8 @@
 
 namespace
 {
-    constexpr int designWidth  = 1180;
-    constexpr int designHeight = 1220;
+    constexpr int designWidth  = 1640;
+    constexpr int designHeight = 760;
 
     static juce::String dbText (float value)
     {
@@ -15,6 +15,20 @@ namespace
     {
         if (gr) return juce::jlimit (0.0f, 1.0f, db / 24.0f);
         return juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f);
+    }
+
+    static void layoutKnob (D7SChannelStripFullAudioProcessorEditor::ParamSlider& control,
+                            juce::Rectangle<int> r)
+    {
+        control.label.setBounds (r.removeFromTop (18));
+        control.slider.setBounds (r);
+    }
+
+    static juce::Rectangle<int> nextRowLeft (juce::Rectangle<int>& row, int width = 76)
+    {
+        auto r = row.removeFromLeft (width);
+        row.removeFromLeft (8);
+        return r;
     }
 }
 
@@ -104,7 +118,7 @@ D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor
     setupSlider (eqHfFreq, "HF Freq", "eq4k_hf_freq"); setupSlider (eqHfGain, "HF Gain", "eq4k_hf_gain");
     setupBypassButton (eqLfBellButton, "LF Bell", "eq4k_lf_bell", eqLfBellAttachment);
     setupBypassButton (eqHfBellButton, "HF Bell", "eq4k_hf_bell", eqHfBellAttachment);
-    setupBypassButton (eqBypassButton, "EQ Bypass", "eq4k_bypass", eqBypassAttachment);
+    setupBypassButton (eqBypassButton, "EQ IN", "eq4k_bypass", eqBypassAttachment);
 
     setupSlider (comp76Input, "Input", "comp76_input"); setupSlider (comp76Output, "Output", "comp76_output");
     setupSlider (comp76Attack, "Attack", "comp76_attack"); setupSlider (comp76Release, "Release", "comp76_release");
@@ -296,33 +310,117 @@ void D7SChannelStripFullAudioProcessorEditor::resized()
     content.setBounds (0, 38, designWidth, designHeight); content.setTransform (juce::AffineTransform::scale (uiScale));
     auto area = juce::Rectangle<int> (0, 0, designWidth, designHeight).reduced (18);
 
-    auto rackArea = area.removeFromTop (102);
+    auto header = area.removeFromTop (120);
+    auto rackControls = header.removeFromLeft (315);
     for (auto* control : { &rackInput, &rackOutput, &rackMix })
     {
-        auto group = rackArea.removeFromLeft (86); control->label.setBounds (group.removeFromTop (18)); control->slider.setBounds (group.removeFromTop (76)); rackArea.removeFromLeft (8);
+        auto group = rackControls.removeFromLeft (92);
+        layoutKnob (*control, group.removeFromTop (90));
+        rackControls.removeFromLeft (8);
     }
-    rackMeterLabel.setBounds (rackArea.removeFromLeft (310).withHeight (24));
-    rackInMeter.setBounds (rackArea.removeFromLeft (150).withHeight (16)); rackArea.removeFromLeft (8);
-    rackOutMeter.setBounds (rackArea.removeFromLeft (150).withHeight (16));
-    spectrumView.setBounds (area.removeFromTop (115).reduced (0, 4)); area.removeFromTop (8);
+    auto meterArea = header.removeFromLeft (390);
+    rackMeterLabel.setBounds (meterArea.removeFromTop (24));
+    rackInMeter.setBounds (meterArea.removeFromTop (18)); meterArea.removeFromTop (8);
+    rackOutMeter.setBounds (meterArea.removeFromTop (18));
+    spectrumView.setBounds (header.reduced (8, 0));
+    area.removeFromTop (10);
 
-    layoutModuleControls (area, noiseGate, { &noiseSuppression }, noiseBypassButton);
-    noiseMeterLabel.setBounds (area.removeFromTop (20)); noiseGrMeter.setBounds (area.removeFromTop (16)); area.removeFromTop (4);
+    auto modules = area;
+    const int gap = 10;
+    auto noisePanel = modules.removeFromLeft (180); modules.removeFromLeft (gap);
+    auto eqPanel    = modules.removeFromLeft (390); modules.removeFromLeft (gap);
+    auto comp76Panel= modules.removeFromLeft (230); modules.removeFromLeft (gap);
+    auto comp2aPanel= modules.removeFromLeft (260); modules.removeFromLeft (gap);
+    auto tubePanel  = modules.removeFromLeft (250); modules.removeFromLeft (gap);
+    auto esserPanel = modules.removeFromLeft (260);
 
-    layoutModuleControls (area, eq4k, { &eqHpf, &eqLpf, &eqLfFreq, &eqLfGain, &eqLmfFreq, &eqLmfGain, &eqLmfQ, &eqHmfFreq, &eqHmfGain, &eqHmfQ, &eqHfFreq, &eqHfGain }, eqBypassButton);
-    auto eqButtons = area.removeFromTop (30); eqLfBellButton.setBounds (eqButtons.removeFromLeft (110)); eqHfBellButton.setBounds (eqButtons.removeFromLeft (110)); area.removeFromTop (6);
+    auto panelHeader = [] (juce::Rectangle<int>& panel, RackModuleComponent& module)
+    {
+        module.setBounds (panel.removeFromTop (56));
+        panel.removeFromTop (8);
+    };
 
-    layoutModuleControls (area, comp76, { &comp76Input, &comp76Output, &comp76Attack, &comp76Release }, comp76BypassButton);
-    auto ratioArea = area.removeFromTop (30); for (auto& b : comp76RatioButtons) { b.setBounds (ratioArea.removeFromLeft (54)); ratioArea.removeFromLeft (5); }
-    comp76MeterLabel.setBounds (area.removeFromTop (20)); comp76GrMeter.setBounds (area.removeFromTop (16)); area.removeFromTop (4);
+    panelHeader (noisePanel, noiseGate);
+    layoutKnob (noiseSuppression, noisePanel.removeFromTop (96).withWidth (86));
+    noiseBypassButton.setBounds (noisePanel.removeFromTop (28)); noisePanel.removeFromTop (8);
+    noiseMeterLabel.setBounds (noisePanel.removeFromTop (20));
+    noiseGrMeter.setBounds (noisePanel.removeFromTop (16));
 
-    layoutModuleControls (area, comp2a, { &comp2aPeak, &comp2aGain, &comp2aEmphasis, &comp2aMix }, comp2aBypassButton);
-    auto mode2a = area.removeFromTop (30); for (auto& b : comp2aModeButtons) { b.setBounds (mode2a.removeFromLeft (82)); mode2a.removeFromLeft (6); }
-    comp2aMeterLabel.setBounds (area.removeFromTop (20)); comp2aGrMeter.setBounds (area.removeFromTop (16)); area.removeFromTop (4);
+    panelHeader (eqPanel, eq4k);
+    auto filterRow = eqPanel.removeFromTop (105);
+    layoutKnob (eqHpf, nextRowLeft (filterRow));
+    layoutKnob (eqLpf, nextRowLeft (filterRow));
+    eqBypassButton.setBounds (filterRow.removeFromLeft (90).withHeight (28));
+    eqPanel.removeFromTop (8);
 
-    layoutModuleControls (area, tube, { &tubeBeauty, &tubeBeast, &tubeSensitivity, &tubeMix }, tubeBypassButton);
+    auto hfRow = eqPanel.removeFromTop (105);
+    layoutKnob (eqHfGain, nextRowLeft (hfRow));
+    layoutKnob (eqHfFreq, nextRowLeft (hfRow));
+    eqHfBellButton.setBounds (hfRow.removeFromLeft (90).withHeight (28));
+    eqPanel.removeFromTop (8);
 
-    layoutModuleControls (area, esser, { &esserThreshold, &esserFreq, &esserRange }, esserBypassButton);
-    auto modeEsser = area.removeFromTop (30); for (auto& b : esserModeButtons) { b.setBounds (modeEsser.removeFromLeft (82)); modeEsser.removeFromLeft (6); }
-    esserMeterLabel.setBounds (area.removeFromTop (20)); esserGrMeter.setBounds (area.removeFromTop (16));
+    auto hmfRow = eqPanel.removeFromTop (105);
+    layoutKnob (eqHmfGain, nextRowLeft (hmfRow));
+    layoutKnob (eqHmfFreq, nextRowLeft (hmfRow));
+    layoutKnob (eqHmfQ, nextRowLeft (hmfRow));
+    eqPanel.removeFromTop (8);
+
+    auto lmfRow = eqPanel.removeFromTop (105);
+    layoutKnob (eqLmfGain, nextRowLeft (lmfRow));
+    layoutKnob (eqLmfFreq, nextRowLeft (lmfRow));
+    layoutKnob (eqLmfQ, nextRowLeft (lmfRow));
+    eqPanel.removeFromTop (8);
+
+    auto lfRow = eqPanel.removeFromTop (105);
+    layoutKnob (eqLfGain, nextRowLeft (lfRow));
+    layoutKnob (eqLfFreq, nextRowLeft (lfRow));
+    eqLfBellButton.setBounds (lfRow.removeFromLeft (90).withHeight (28));
+
+    panelHeader (comp76Panel, comp76);
+    auto c76Top = comp76Panel.removeFromTop (105);
+    layoutKnob (comp76Input, nextRowLeft (c76Top));
+    layoutKnob (comp76Output, nextRowLeft (c76Top));
+    auto c76Mid = comp76Panel.removeFromTop (105);
+    layoutKnob (comp76Attack, nextRowLeft (c76Mid));
+    layoutKnob (comp76Release, nextRowLeft (c76Mid));
+    comp76BypassButton.setBounds (comp76Panel.removeFromTop (28)); comp76Panel.removeFromTop (8);
+    auto ratioArea = comp76Panel.removeFromTop (30);
+    for (auto& b : comp76RatioButtons) { b.setBounds (ratioArea.removeFromLeft (40)); ratioArea.removeFromLeft (4); }
+    comp76Panel.removeFromTop (8);
+    comp76MeterLabel.setBounds (comp76Panel.removeFromTop (20));
+    comp76GrMeter.setBounds (comp76Panel.removeFromTop (16));
+
+    panelHeader (comp2aPanel, comp2a);
+    auto c2aTop = comp2aPanel.removeFromTop (105);
+    layoutKnob (comp2aPeak, nextRowLeft (c2aTop));
+    layoutKnob (comp2aGain, nextRowLeft (c2aTop));
+    auto c2aMid = comp2aPanel.removeFromTop (105);
+    layoutKnob (comp2aEmphasis, nextRowLeft (c2aMid));
+    layoutKnob (comp2aMix, nextRowLeft (c2aMid));
+    comp2aBypassButton.setBounds (comp2aPanel.removeFromTop (28)); comp2aPanel.removeFromTop (8);
+    auto mode2a = comp2aPanel.removeFromTop (30); for (auto& b : comp2aModeButtons) { b.setBounds (mode2a.removeFromLeft (78)); mode2a.removeFromLeft (6); }
+    comp2aPanel.removeFromTop (8);
+    comp2aMeterLabel.setBounds (comp2aPanel.removeFromTop (20));
+    comp2aGrMeter.setBounds (comp2aPanel.removeFromTop (16));
+
+    panelHeader (tubePanel, tube);
+    auto tubeTop = tubePanel.removeFromTop (105);
+    layoutKnob (tubeBeauty, nextRowLeft (tubeTop));
+    layoutKnob (tubeBeast, nextRowLeft (tubeTop));
+    auto tubeMid = tubePanel.removeFromTop (105);
+    layoutKnob (tubeSensitivity, nextRowLeft (tubeMid));
+    layoutKnob (tubeMix, nextRowLeft (tubeMid));
+    tubeBypassButton.setBounds (tubePanel.removeFromTop (28));
+
+    panelHeader (esserPanel, esser);
+    auto esTop = esserPanel.removeFromTop (105);
+    layoutKnob (esserThreshold, nextRowLeft (esTop));
+    layoutKnob (esserFreq, nextRowLeft (esTop));
+    auto esMid = esserPanel.removeFromTop (105);
+    layoutKnob (esserRange, nextRowLeft (esMid));
+    esserBypassButton.setBounds (esMid.removeFromLeft (120).withHeight (28));
+    auto modeEsser = esserPanel.removeFromTop (30); for (auto& b : esserModeButtons) { b.setBounds (modeEsser.removeFromLeft (82)); modeEsser.removeFromLeft (6); }
+    esserPanel.removeFromTop (8);
+    esserMeterLabel.setBounds (esserPanel.removeFromTop (20));
+    esserGrMeter.setBounds (esserPanel.removeFromTop (16));
 }
