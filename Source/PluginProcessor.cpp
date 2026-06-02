@@ -3,8 +3,8 @@
 
 D7SChannelStripFullAudioProcessor::D7SChannelStripFullAudioProcessor()
     : AudioProcessor (BusesProperties()
-        .withInput  ("Input",  juce::AudioChannelSet::stereo(), false)
-        .withOutput ("Output", juce::AudioChannelSet::stereo(), false))
+        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+        .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
 {
 }
 
