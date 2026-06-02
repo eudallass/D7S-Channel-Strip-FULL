@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <array>
 #include "PluginProcessor.h"
 #include "UI/RackModuleComponent.h"
 
@@ -18,7 +19,6 @@ public:
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     struct ParamSlider
     {
@@ -27,19 +27,34 @@ private:
         std::unique_ptr<SliderAttachment> attachment;
     };
 
-    struct ParamChoice
+    class HorizontalMeter : public juce::Component
     {
-        juce::Label label;
-        juce::ComboBox box;
-        std::unique_ptr<ComboBoxAttachment> attachment;
+    public:
+        void setDbValue (float newDb, bool isGainReduction);
+        void paint (juce::Graphics& g) override;
+    private:
+        float dbValue { -120.0f };
+        bool grMode { false };
+    };
+
+    class SpectrumView : public juce::Component
+    {
+    public:
+        explicit SpectrumView (D7SChannelStripFullAudioProcessor& p) : processor (p) {}
+        void paint (juce::Graphics& g) override;
+    private:
+        D7SChannelStripFullAudioProcessor& processor;
     };
 
     void setUIScale (float newScale);
     void updateScaleButtonStates();
 
     void setupSlider (ParamSlider& control, const juce::String& labelText, const juce::String& paramID);
-    void setupChoice (ParamChoice& control, const juce::String& labelText, const juce::String& paramID, const juce::StringArray& items);
     void setupBypassButton (juce::ToggleButton& button, const juce::String& text, const juce::String& paramID, std::unique_ptr<ButtonAttachment>& attachment);
+    void setupChoiceButtons (std::array<juce::TextButton, 5>& buttons, const juce::StringArray& labels, const juce::String& paramID);
+    void setupChoiceButtons (std::array<juce::TextButton, 2>& buttons, const juce::StringArray& labels, const juce::String& paramID);
+    void setChoiceValue (const juce::String& paramID, int index);
+    void syncChoiceButtons();
     void connectRackButton (RackModuleComponent& module, const juce::String& bypassParamID);
     void syncRackVisuals();
     void timerCallback() override;
@@ -47,7 +62,6 @@ private:
     void layoutModuleControls (juce::Rectangle<int>& area,
                                RackModuleComponent& module,
                                std::initializer_list<ParamSlider*> sliders,
-                               std::initializer_list<ParamChoice*> choices,
                                juce::ToggleButton& bypassButton);
 
     D7SChannelStripFullAudioProcessor& audioProcessor;
@@ -70,9 +84,13 @@ private:
     ParamSlider rackOutput;
     ParamSlider rackMix;
     juce::Label rackMeterLabel;
+    HorizontalMeter rackInMeter;
+    HorizontalMeter rackOutMeter;
+    SpectrumView spectrumView { audioProcessor };
 
     ParamSlider noiseSuppression;
     juce::Label noiseMeterLabel;
+    HorizontalMeter noiseGrMeter;
     juce::ToggleButton noiseBypassButton;
     std::unique_ptr<ButtonAttachment> noiseBypassAttachment;
 
@@ -99,8 +117,9 @@ private:
     ParamSlider comp76Output;
     ParamSlider comp76Attack;
     ParamSlider comp76Release;
-    ParamChoice comp76Ratio;
+    std::array<juce::TextButton, 5> comp76RatioButtons { juce::TextButton { "4" }, juce::TextButton { "8" }, juce::TextButton { "12" }, juce::TextButton { "20" }, juce::TextButton { "All" } };
     juce::Label comp76MeterLabel;
+    HorizontalMeter comp76GrMeter;
     juce::ToggleButton comp76BypassButton;
     std::unique_ptr<ButtonAttachment> comp76BypassAttachment;
 
@@ -108,22 +127,25 @@ private:
     ParamSlider comp2aGain;
     ParamSlider comp2aEmphasis;
     ParamSlider comp2aMix;
-    ParamChoice comp2aMode;
+    std::array<juce::TextButton, 2> comp2aModeButtons { juce::TextButton { "Comp" }, juce::TextButton { "Limit" } };
     juce::Label comp2aMeterLabel;
+    HorizontalMeter comp2aGrMeter;
     juce::ToggleButton comp2aBypassButton;
     std::unique_ptr<ButtonAttachment> comp2aBypassAttachment;
 
     ParamSlider tubeBeauty;
     ParamSlider tubeBeast;
     ParamSlider tubeSensitivity;
+    ParamSlider tubeMix;
     juce::ToggleButton tubeBypassButton;
     std::unique_ptr<ButtonAttachment> tubeBypassAttachment;
 
     ParamSlider esserThreshold;
     ParamSlider esserFreq;
     ParamSlider esserRange;
-    ParamChoice esserMode;
+    std::array<juce::TextButton, 2> esserModeButtons { juce::TextButton { "Wide" }, juce::TextButton { "Split" } };
     juce::Label esserMeterLabel;
+    HorizontalMeter esserGrMeter;
     juce::ToggleButton esserBypassButton;
     std::unique_ptr<ButtonAttachment> esserBypassAttachment;
 
