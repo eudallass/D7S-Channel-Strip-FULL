@@ -24,6 +24,19 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Download pluginval
+        run: |
+          curl -L "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip" -o pluginval.zip
+          unzip pluginval.zip -d pluginval
+          chmod +x pluginval/pluginval.app/Contents/MacOS/pluginval || true
+
+      - name: Validate VST3
+        run: |
+          pluginval/pluginval.app/Contents/MacOS/pluginval \
+            --validate-in-process \
+            --strictness-level 5 \
+            "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
+
       - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
