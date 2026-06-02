@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <array>
 #include "Modules/NoiseGT1Processor.h"
 
 class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
@@ -45,9 +46,28 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
+    template <typename FloatType>
+    void processAudioBlock (juce::AudioBuffer<FloatType>& buffer);
+
+    void resetInternalStates();
+
     juce::AudioProcessorValueTreeState apvts;
 
     NoiseGT1Processor noiseGT1;
+
+    double currentSampleRate { 44100.0 };
+
+    std::array<double, 8> eqLp100  {};
+    std::array<double, 8> eqLp500  {};
+    std::array<double, 8> eqLp1500 {};
+    std::array<double, 8> eqLp3000 {};
+    std::array<double, 8> eqLp6000 {};
+
+    std::array<double, 8> comp76Env {};
+    std::array<double, 8> comp2aEnv {};
+
+    std::array<double, 8> esserLp  {};
+    std::array<double, 8> esserEnv {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (D7SChannelStripFullAudioProcessor)
 };
