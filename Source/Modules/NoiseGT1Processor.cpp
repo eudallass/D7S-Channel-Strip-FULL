@@ -18,6 +18,7 @@ void NoiseGT1Processor::prepare (double sr, int /*samplesPerBlock*/, int numCh)
 {
     sampleRate  = sr;
     numChannels = juce::jmin (numCh, (int) signalEnvelope.size());
+    lookaheadSamples = static_cast<int> (0.002 * sr);
 
     signalAttackCoeff  = computeAttackCoeff  (0.5f,  sr);
     signalReleaseCoeff = computeReleaseCoeff (45.0f, sr);
@@ -138,19 +139,18 @@ float NoiseGT1Processor::computeGainTarget (float signalRms, float noiseRms) con
     if (amount < 0.001f)
         return 1.0f;
 
-    const float threshold = computeThreshold();
-    const float floorMultiplier = 2.0f + amount * 18.0f;
-    const float effectiveThreshold = juce::jmax (threshold, noiseRms * floorMultiplier);
+    const float signalDb = juce::Decibels::gainToDecibels (juce::jmax (signalRms, 1.0e-9f));
+    const float noiseDb  = juce::Decibels::gainToDecibels (juce::jmax (noiseRms, 1.0e-9f));
+    const float thresholdDb = juce::Decibels::gainToDecibels (computeThreshold());
+    const float adaptiveThresholdDb = juce::jmax (thresholdDb, noiseDb + 6.0f + amount * 18.0f);
 
-    if (signalRms >= effectiveThreshold)
+    if (signalDb >= adaptiveThresholdDb)
         return 1.0f;
 
-    const float ratio = juce::jlimit (0.0f, 1.0f, signalRms / juce::jmax (effectiveThreshold, 1e-9f));
-    const float exponent = 1.15f + amount * 3.25f;
-    float gainTarget = std::pow (ratio, exponent);
+    const float belowDb = juce::jlimit (0.0f, 72.0f, adaptiveThresholdDb - signalDb);
     const float maxReductionDb = 12.0f + amount * 48.0f;
-    const float minGain = juce::Decibels::decibelsToGain (-maxReductionDb);
-    return juce::jlimit (minGain, 1.0f, gainTarget);
+    const float reductionDb = juce::jmin (maxReductionDb, belowDb * (0.35f + amount * 0.90f));
+    return juce::Decibels::decibelsToGain (-reductionDb);
 }
 
 float NoiseGT1Processor::computeAttackCoeff (float timeMs, double sr) noexcept
