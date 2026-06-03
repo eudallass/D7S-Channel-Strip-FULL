@@ -26,6 +26,7 @@ private:
     static double onePoleCoeff (double frequency, double sampleRate) noexcept;
     static BiquadCoefficients makePeakingEQ (double frequency, double q, double gainDb, double sampleRate) noexcept;
     static double processBiquad (double x, const BiquadCoefficients& c, double& z1, double& z2) noexcept;
+    static double consoleSoftClip (double x, double drive01) noexcept;
 
     template <typename FloatType>
     void processInternal (juce::AudioBuffer<FloatType>& buffer);
@@ -44,6 +45,7 @@ private:
     std::atomic<float>* hfFreqParam { nullptr };
     std::atomic<float>* hfGainParam { nullptr };
     std::atomic<float>* hfBellParam { nullptr };
+    std::atomic<float>* driveParam { nullptr };
     std::atomic<float>* bypassParam { nullptr };
 
     double sr { 44100.0 };
@@ -70,5 +72,6 @@ private:
     juce::SmoothedValue<float> hmfQSmooth;
     juce::SmoothedValue<float> hfFreqSmooth;
     juce::SmoothedValue<float> hfGainSmooth;
+    juce::SmoothedValue<float> driveSmooth;
     juce::SmoothedValue<float> bypassWet;
 };
