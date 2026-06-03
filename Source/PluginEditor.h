@@ -38,6 +38,16 @@ private:
         bool grMode { false };
     };
 
+    // Kept as a temporary compatibility shim while SpectrumDisplay replaces the old analyzer.
+    class SpectrumView : public juce::Component
+    {
+    public:
+        explicit SpectrumView (D7SChannelStripFullAudioProcessor& p) : processor (p) {}
+        void paint (juce::Graphics& g) override;
+    private:
+        D7SChannelStripFullAudioProcessor& processor;
+    };
+
     void setUIScale (float newScale);
     void updateScaleButtonStates();
 
