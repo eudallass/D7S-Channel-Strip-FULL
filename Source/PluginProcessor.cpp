@@ -39,11 +39,11 @@ namespace
         return juce::Decibels::gainToDecibels (juce::jmax (value, 1.0e-9));
     }
 
-    static double spectrumFrequencyForIndex (int index)
+    static float logFrequencyForBin (int index, int totalBins)
     {
-        const double minHz = 25.0;
-        const double maxHz = 21000.0;
-        const double normalised = (double) index / (double) D7SChannelStripFullAudioProcessor::numSpectrumBins;
+        const float minHz = 20.0f;
+        const float maxHz = 20000.0f;
+        const float normalised = (float) index / (float) juce::jmax (1, totalBins - 1);
         return minHz * std::pow (maxHz / minHz, normalised);
     }
 }
@@ -150,8 +150,65 @@ float D7SChannelStripFullAudioProcessor::getSpectrumBinDb (int index) const noex
     return spectrumBinsDb[(size_t) index].load();
 }
 
+void D7SChannelStripFullAudioProcessor::pushSpectrumSample (float sample) noexcept
+{
+    spectrumFifo[(size_t) spectrumFifoIndex++] = sample;
+
+    if (spectrumFifoIndex >= spectrumFFTSize)
+    {
+        runSpectrumFFT();
+        spectrumFifoIndex = 0;
+    }
+}
+
+void D7SChannelStripFullAudioProcessor::runSpectrumFFT() noexcept
+{
+    std::fill (spectrumFftData.begin(), spectrumFftData.end(), 0.0f);
+    std::copy (spectrumFifo.begin(), spectrumFifo.end(), spectrumFftData.begin());
+
+    spectrumWindow.multiplyWithWindowingTable (spectrumFftData.data(), spectrumFFTSize);
+    spectrumFFT.performFrequencyOnlyForwardTransform (spectrumFftData.data(), true);
+
+    const float nyquist = (float) currentSampleRate * 0.5f;
+    const int fftBins = spectrumFFTSize / 2;
+
+    for (int band = 0; band < numSpectrumBins; ++band)
+    {
+        const float f0 = logFrequencyForBin (band, numSpectrumBins);
+        const float f1 = logFrequencyForBin (juce::jmin (band + 1, numSpectrumBins - 1), numSpectrumBins);
+        const int bin0 = juce::jlimit (1, fftBins - 1, (int) std::floor ((f0 / nyquist) * (float) fftBins));
+        const int bin1 = juce::jlimit (bin0 + 1, fftBins, (int) std::ceil ((f1 / nyquist) * (float) fftBins));
+
+        float energy = 0.0f;
+        int count = 0;
+        for (int bin = bin0; bin < bin1; ++bin)
+        {
+            const float mag = spectrumFftData[(size_t) bin] / (float) spectrumFFTSize;
+            energy += mag * mag;
+            ++count;
+        }
+
+        const float rms = std::sqrt (energy / (float) juce::jmax (1, count));
+        float targetDb = juce::Decibels::gainToDecibels (rms, -120.0f) + 42.0f;
+        targetDb = juce::jlimit (-96.0f, 12.0f, targetDb);
+
+        auto& smooth = spectrumSmoothedDb[(size_t) band];
+        const float coeff = targetDb > smooth ? 0.48f : 0.12f;
+        smooth += coeff * (targetDb - smooth);
+
+        auto& peak = spectrumPeakDb[(size_t) band];
+        if (smooth > peak)
+            peak = smooth;
+        else
+            peak -= 0.55f;
+
+        spectrumBinsDb[(size_t) band].store (juce::jmax (smooth, peak - 18.0f));
+    }
+}
+
 void D7SChannelStripFullAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    juce::ignoreUnused (samplesPerBlock);
     currentSampleRate = sampleRate;
     noiseGT1.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
     resetInternalStates();
@@ -169,11 +226,17 @@ void D7SChannelStripFullAudioProcessor::resetInternalStates()
     eqLmfLow.fill (0.0); eqLmfHigh.fill (0.0); eqHmfLow.fill (0.0); eqHmfHigh.fill (0.0); eqHfState.fill (0.0);
     comp76Env.fill (0.0); comp2aEnv.fill (0.0); tubeBeautyState.fill (0.0); tubeBeastState.fill (0.0);
     esserLp.fill (0.0); esserEnv.fill (0.0);
-    spectrumLp.fill (0.0); spectrumEnergy.fill (0.0);
+
+    spectrumFifo.fill (0.0f);
+    spectrumFftData.fill (0.0f);
+    spectrumSmoothedDb.fill (-96.0f);
+    spectrumPeakDb.fill (-96.0f);
+    spectrumFifoIndex = 0;
+
     rackInputPeakDb.store (-120.0f); rackOutputPeakDb.store (-120.0f);
     comp76GainReductionDb.store (0.0f); comp2aGainReductionDb.store (0.0f); esserGainReductionDb.store (0.0f);
     for (auto& bin : spectrumBinsDb)
-        bin.store (-120.0f);
+        bin.store (-96.0f);
 }
 
 bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -413,18 +476,10 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
             double x = (double) dry[i] * (1.0 - rackMix) + (double) data[i] * rackMix;
             x *= rackOut;
             outputPeak = juce::jmax (outputPeak, std::abs (x));
-
-            double previousLow = 0.0;
-            for (int bin = 0; bin < numSpectrumBins; ++bin)
-            {
-                const double coeff = onePoleCoeff (spectrumFrequencyForIndex (bin + 1), currentSampleRate);
-                spectrumLp[(size_t) bin] += coeff * (x - spectrumLp[(size_t) bin]);
-                const double band = spectrumLp[(size_t) bin] - previousLow;
-                previousLow = spectrumLp[(size_t) bin];
-                spectrumEnergy[(size_t) bin] += 0.006 * ((band * band) - spectrumEnergy[(size_t) bin]);
-            }
-
             data[i] = (FloatType) juce::jlimit (-4.0, 4.0, x);
+
+            if (ch == 0)
+                pushSpectrumSample ((float) x);
         }
     }
 
@@ -433,9 +488,6 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
     comp76GainReductionDb.store ((float) max76Gr);
     comp2aGainReductionDb.store ((float) max2aGr);
     esserGainReductionDb.store ((float) maxEsserGr);
-
-    for (int bin = 0; bin < numSpectrumBins; ++bin)
-        spectrumBinsDb[(size_t) bin].store ((float) peakDbFromLinear (std::sqrt (juce::jmax (spectrumEnergy[(size_t) bin], 1.0e-12))));
 }
 
 void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { processAudioBlock (buffer); }
