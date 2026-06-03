@@ -75,8 +75,8 @@ void Comp2AProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
         const double emphasis = emphasisSmooth.getNextValue() / 100.0;
         const double localMix = mixSmooth.getNextValue() / 100.0;
         const double wetMix = bypassWet.getNextValue();
-        const double attack = smoothCoeffMs (10.0, sr);
-        const double release = smoothCoeffMs (700.0, sr);
+        const double attack = smoothCoeffMs (8.0, sr);
+        const double baseReleaseMs = 420.0 + peak * 380.0;
         const double threshold = -8.0 - peak * 36.0;
         const double slope = limitMode ? 0.78 : 0.52;
 
@@ -86,11 +86,14 @@ void Comp2AProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
             const double dry = (double) data[i];
             const double detDb = peakDbFromLinear (std::abs (dry) * (1.0 + emphasis * 1.5));
             const double target = detDb > threshold ? (detDb - threshold) * slope : 0.0;
+            const double programRelease = baseReleaseMs + juce::jlimit (0.0, 800.0, env[(size_t) ch] * 38.0);
+            const double release = smoothCoeffMs (programRelease, sr);
             const double coeff = target > env[(size_t) ch] ? attack : release;
             env[(size_t) ch] += coeff * (target - env[(size_t) ch]);
             maxGr = juce::jmax (maxGr, env[(size_t) ch]);
             double wet = dry * juce::Decibels::decibelsToGain (-env[(size_t) ch]);
-            wet = std::tanh (wet * 1.05) / std::tanh (1.05);
+            const double drive = 1.05 + peak * 0.55 + emphasis * 0.12;
+            wet = (std::tanh (wet * drive + 0.025) - std::tanh (0.025)) / std::tanh (drive);
             wet *= makeUp;
             const double compressed = dry * (1.0 - localMix) + wet * localMix;
             data[i] = (FloatType) (dry * (1.0 - wetMix) + compressed * wetMix);
