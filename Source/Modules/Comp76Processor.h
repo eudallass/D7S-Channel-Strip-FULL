@@ -14,6 +14,7 @@ public:
     void process (juce::AudioBuffer<float>& buffer) override;
     void process (juce::AudioBuffer<double>& buffer) override;
     void setBypass (bool shouldBypass) override;
+    int getLatencySamples() const override { return lookaheadSamples + oversampleLatency; }
     const juce::String getIdentifier() const override { return "comp76"; }
 
     void cacheParameters (juce::AudioProcessorValueTreeState& apvts);
@@ -35,6 +36,8 @@ private:
 
     double sr { 44100.0 };
     int channels { 2 };
+    int lookaheadSamples { 0 };
+    int oversampleLatency { 0 };
     std::array<double, 8> env {};
 
     juce::SmoothedValue<float> inputSmooth;
