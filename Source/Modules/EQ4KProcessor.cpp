@@ -24,6 +24,7 @@ void EQ4KProcessor::cacheParameters (juce::AudioProcessorValueTreeState& apvts)
     hfFreqParam  = apvts.getRawParameterValue ("eq4k_hf_freq");
     hfGainParam  = apvts.getRawParameterValue ("eq4k_hf_gain");
     hfBellParam  = apvts.getRawParameterValue ("eq4k_hf_bell");
+    driveParam   = apvts.getRawParameterValue ("eq4k_drive");
     bypassParam  = apvts.getRawParameterValue ("eq4k_bypass");
 }
 
@@ -33,7 +34,7 @@ void EQ4KProcessor::prepare (double sampleRate, int, int numChannels)
     channels = juce::jlimit (1, 8, numChannels);
 
     for (auto* s : { &hpfSmooth, &lpfSmooth, &lfFreqSmooth, &lfGainSmooth, &lmfFreqSmooth, &lmfGainSmooth, &lmfQSmooth,
-                     &hmfFreqSmooth, &hmfGainSmooth, &hmfQSmooth, &hfFreqSmooth, &hfGainSmooth, &bypassWet })
+                     &hmfFreqSmooth, &hmfGainSmooth, &hmfQSmooth, &hfFreqSmooth, &hfGainSmooth, &driveSmooth, &bypassWet })
         s->reset (sr, 0.015);
 
     reset();
@@ -56,6 +57,7 @@ void EQ4KProcessor::reset()
     hmfQSmooth.setCurrentAndTargetValue (readParam (hmfQParam, 1.0f));
     hfFreqSmooth.setCurrentAndTargetValue (readParam (hfFreqParam, 10000.0f));
     hfGainSmooth.setCurrentAndTargetValue (readParam (hfGainParam, 0.0f));
+    driveSmooth.setCurrentAndTargetValue (readParam (driveParam, 0.0f));
     bypassWet.setCurrentAndTargetValue (readParam (bypassParam, 1.0f) > 0.5f ? 0.0f : 1.0f);
 }
 
@@ -96,6 +98,16 @@ double EQ4KProcessor::processBiquad (double x, const BiquadCoefficients& c, doub
     return y;
 }
 
+double EQ4KProcessor::consoleSoftClip (double x, double drive01) noexcept
+{
+    if (drive01 <= 0.0001)
+        return x;
+
+    const double g = 1.0 + drive01 * 0.78;
+    const double shaped = std::tanh (x * g + 0.004 * drive01) - std::tanh (0.004 * drive01);
+    return shaped / std::tanh (g);
+}
+
 template <typename FloatType>
 void EQ4KProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
 {
@@ -114,6 +126,7 @@ void EQ4KProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
     hmfQSmooth.setTargetValue (readParam (hmfQParam, 1.0f));
     hfFreqSmooth.setTargetValue (readParam (hfFreqParam, 10000.0f));
     hfGainSmooth.setTargetValue (readParam (hfGainParam, 0.0f));
+    driveSmooth.setTargetValue (readParam (driveParam, 0.0f));
     setBypass (readParam (bypassParam, 1.0f) > 0.5f);
 
     for (int i = 0; i < n; ++i)
@@ -121,11 +134,17 @@ void EQ4KProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
         const double hpf = hpfSmooth.getNextValue();
         const double lpf = lpfSmooth.getNextValue();
         const double lfFreq = lfFreqSmooth.getNextValue();
-        const double lfGain = juce::Decibels::decibelsToGain ((double) lfGainSmooth.getNextValue());
-        const auto lmf = makePeakingEQ (lmfFreqSmooth.getNextValue(), lmfQSmooth.getNextValue(), lmfGainSmooth.getNextValue(), sr);
-        const auto hmf = makePeakingEQ (hmfFreqSmooth.getNextValue(), hmfQSmooth.getNextValue(), hmfGainSmooth.getNextValue(), sr);
+        const double lfGainDb = lfGainSmooth.getNextValue();
+        const double lfGain = juce::Decibels::decibelsToGain (lfGainDb * 1.03);
+        const double lmfGainDb = lmfGainSmooth.getNextValue();
+        const double hmfGainDb = hmfGainSmooth.getNextValue();
+        const double lmfQ = lmfQSmooth.getNextValue() * (1.0 + std::abs (lmfGainDb) * 0.08);
+        const double hmfQ = hmfQSmooth.getNextValue() * (1.0 + std::abs (hmfGainDb) * 0.08);
+        const auto lmf = makePeakingEQ (lmfFreqSmooth.getNextValue(), lmfQ, lmfGainDb * 1.08, sr);
+        const auto hmf = makePeakingEQ (hmfFreqSmooth.getNextValue(), hmfQ, hmfGainDb * 1.08, sr);
         const double hfFreq = hfFreqSmooth.getNextValue();
-        const double hfGain = juce::Decibels::decibelsToGain ((double) hfGainSmooth.getNextValue());
+        const double hfGain = juce::Decibels::decibelsToGain ((double) hfGainSmooth.getNextValue() * 1.03);
+        const double drive = driveSmooth.getNextValue() / 100.0;
         const double wetMix = bypassWet.getNextValue();
         const double hpfC = onePoleCoeff (hpf, sr);
         const double lpfC = onePoleCoeff (lpf, sr);
@@ -143,7 +162,7 @@ void EQ4KProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
             x = processBiquad (x, lmf, lmfZ1[(size_t) ch], lmfZ2[(size_t) ch]);
             x = processBiquad (x, hmf, hmfZ1[(size_t) ch], hmfZ2[(size_t) ch]);
             hfState[(size_t) ch] += hfC * (x - hfState[(size_t) ch]); x += (x - hfState[(size_t) ch]) * (hfGain - 1.0);
-            x = std::tanh (x * 1.015) / std::tanh (1.015);
+            x = consoleSoftClip (x, drive);
             data[i] = (FloatType) (dry * (1.0 - wetMix) + x * wetMix);
         }
     }
