@@ -22,6 +22,7 @@ void Comp76Processor::prepare (double sampleRate, int, int numChannels)
 {
     sr = sampleRate > 0.0 ? sampleRate : 44100.0;
     channels = juce::jlimit (1, 8, numChannels);
+    lookaheadSamples = static_cast<int> (0.003 * sr);
     for (auto* s : { &inputSmooth, &outputSmooth, &attackSmooth, &releaseSmooth, &bypassWet })
         s->reset (sr, 0.015);
     reset();
@@ -29,7 +30,7 @@ void Comp76Processor::prepare (double sampleRate, int, int numChannels)
 
 void Comp76Processor::reset()
 {
-    env.fill (0.0);
+    env.fill (-120.0);
     inputSmooth.setCurrentAndTargetValue (readParam (inputParam, 4.0f));
     outputSmooth.setCurrentAndTargetValue (readParam (outputParam, 5.0f));
     attackSmooth.setCurrentAndTargetValue (readParam (attackParam, 3.0f));
@@ -75,7 +76,7 @@ void Comp76Processor::processInternal (juce::AudioBuffer<FloatType>& buffer)
         const double inputGain = juce::Decibels::decibelsToGain (-18.0 + inputSmooth.getNextValue() * 4.2);
         const double outputGain = juce::Decibels::decibelsToGain (-18.0 + outputSmooth.getNextValue() * 3.6);
         const double attackCoeff = smoothCoeffMs (0.02 + (7.0 - attackSmooth.getNextValue()) * 1.15, sr);
-        const double releaseCoeff = smoothCoeffMs (40.0 + (7.0 - releaseSmooth.getNextValue()) * 180.0, sr);
+        const double releaseCoeff = smoothCoeffMs (40.0 + (7.0 - releaseSmooth.getNextValue()) * 95.0, sr);
         const double wetMix = bypassWet.getNextValue();
 
         for (int ch = 0; ch < numCh; ++ch)
@@ -83,10 +84,10 @@ void Comp76Processor::processInternal (juce::AudioBuffer<FloatType>& buffer)
             auto* data = buffer.getWritePointer (ch);
             const double dry = (double) data[i];
             double x = dry * inputGain;
-            const double det = std::abs (x);
-            const double coeff = det > env[(size_t) ch] ? attackCoeff : releaseCoeff;
-            env[(size_t) ch] += coeff * (det - env[(size_t) ch]);
-            const double over = peakDbFromLinear (env[(size_t) ch]) - (-24.0);
+            const double detDb = peakDbFromLinear (std::abs (x));
+            const double coeff = detDb > env[(size_t) ch] ? attackCoeff : releaseCoeff;
+            env[(size_t) ch] += coeff * (detDb - env[(size_t) ch]);
+            const double over = env[(size_t) ch] - (-24.0);
             const double grDb = over > 0.0 ? over * (1.0 - (1.0 / ratio)) : 0.0;
             maxGr = juce::jmax (maxGr, grDb);
             x *= juce::Decibels::decibelsToGain (-grDb);
