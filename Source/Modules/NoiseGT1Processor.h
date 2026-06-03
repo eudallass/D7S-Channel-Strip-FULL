@@ -4,16 +4,6 @@
 #include <juce_dsp/juce_dsp.h>
 #include <array>
 
-/**
- * D7S NoiseGT1 -- Gate inteligente inspirado no Waves NS1 Noise Suppressor
- *
- * Filosofia: um knob so (Suppression), operacao adaptativa, sem pumping.
- * O detector usa RMS com duas constantes de tempo (analise lenta de noise floor
- * + envelope rapido do sinal) pra decidir quanto gain reduction aplicar.
- *
- * Signal flow:
- *   Input -> RMS Detector -> Gain Computer -> Gain Smoother -> VCA -> Output
- */
 class NoiseGT1Processor
 {
 public:
@@ -23,15 +13,22 @@ public:
     void prepare (double sampleRate, int samplesPerBlock, int numChannels);
     void reset();
 
-    template <typename FloatType>
-    void process (juce::AudioBuffer<FloatType>& buffer);
+    void process (juce::AudioBuffer<float>& buffer);
+    void process (juce::AudioBuffer<double>& buffer);
 
+    void cacheParameters (juce::AudioProcessorValueTreeState& apvts);
     void setSuppressionAmount (float zeroToOne);
     void setBypass (bool shouldBypass);
 
     float getGainReductionDb() const noexcept { return gainReductionDb.load(); }
 
 private:
+    template <typename FloatType>
+    void processInternal (juce::AudioBuffer<FloatType>& buffer);
+
+    std::atomic<float>* suppressionParam { nullptr };
+    std::atomic<float>* bypassParam { nullptr };
+
     float suppressionAmount { 0.5f };
     bool  bypassed          { false };
 
@@ -49,6 +46,9 @@ private:
     float currentGain      { 1.0f };
     float gainAttackCoeff  { 0.0f };
     float gainReleaseCoeff { 0.0f };
+
+    juce::SmoothedValue<float> bypassWet;
+    juce::SmoothedValue<float> suppressionSmooth;
 
     std::atomic<float> gainReductionDb { 0.0f };
 
