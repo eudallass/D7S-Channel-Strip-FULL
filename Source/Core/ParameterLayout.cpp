@@ -26,6 +26,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "eq4k_hf_freq", 1 }, "EQ 4K HF Freq", juce::NormalisableRange<float> (1500.0f, 16000.0f), 10000.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "eq4k_hf_gain", 1 }, "EQ 4K HF Gain", juce::NormalisableRange<float> (-15.0f, 15.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "eq4k_hf_bell", 1 }, "EQ 4K HF Bell", false));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "eq4k_drive", 1 }, "EQ 4K Drive", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "eq4k_bypass", 1 }, "EQ 4K Bypass", true));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp76_input", 1 }, "76 Input", juce::NormalisableRange<float> (0.0f, 10.0f), 4.0f));
@@ -61,6 +62,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "delay_glide_on", 1 }, "Delay Glide", false));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "delay_glide_direction", 1 }, "Delay Glide Direction", juce::StringArray { "Up", "Down", "Random" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_glide_time", 1 }, "Delay Glide Time", juce::NormalisableRange<float> (0.0f, 100.0f), 35.0f));
+
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "analyzer_pre_enabled", 1 }, "Analyzer Pre", true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "analyzer_post_enabled", 1 }, "Analyzer Post", true));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "analyzer_resolution", 1 }, "Analyzer Resolution", juce::StringArray { "Low", "Medium", "High", "Maximum" }, 1));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "analyzer_speed", 1 }, "Analyzer Speed", juce::StringArray { "Very Fast", "Fast", "Medium", "Slow", "Very Slow" }, 3));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "analyzer_tilt", 1 }, "Analyzer Tilt", juce::NormalisableRange<float> (-9.0f, 9.0f), 4.5f));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "analyzer_range", 1 }, "Analyzer Range", juce::StringArray { "60 dB", "90 dB", "120 dB" }, 1));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "analyzer_reference_db", 1 }, "Analyzer Reference", juce::NormalisableRange<float> (-30.0f, 0.0f), -18.0f));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "analyzer_freeze", 1 }, "Analyzer Freeze", false));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "analyzer_auto_range", 1 }, "Analyzer Auto Range", false));
 
     return { params.begin(), params.end() };
 }
