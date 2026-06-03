@@ -7,13 +7,15 @@ namespace
 
     static juce::String dbText (float value)
     {
-        if (value <= -119.0f) return "-inf dB";
+        if (value <= -119.0f)
+            return "-inf dB";
         return juce::String (value, 1) + " dB";
     }
 
     static float meterNormFromDb (float db, bool gr)
     {
-        if (gr) return juce::jlimit (0.0f, 1.0f, db / 24.0f);
+        if (gr)
+            return juce::jlimit (0.0f, 1.0f, db / 24.0f);
         return juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f);
     }
 
@@ -49,24 +51,56 @@ void D7SChannelStripFullAudioProcessorEditor::HorizontalMeter::paint (juce::Grap
 void D7SChannelStripFullAudioProcessorEditor::SpectrumView::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat().reduced (4.0f);
-    g.setColour (juce::Colour (18, 18, 18));
+
+    g.setColour (juce::Colour (10, 12, 15));
     g.fillRoundedRectangle (bounds, 5.0f);
-    g.setColour (juce::Colour (75, 75, 75));
+    g.setColour (juce::Colour (65, 72, 82));
     g.drawRoundedRectangle (bounds, 5.0f, 1.0f);
 
+    auto plot = bounds.reduced (8.0f, 14.0f);
+
+    g.setColour (juce::Colours::white.withAlpha (0.06f));
+    for (int i = 1; i < 4; ++i)
+    {
+        const float y = plot.getY() + plot.getHeight() * ((float) i / 4.0f);
+        g.drawHorizontalLine ((int) y, plot.getX(), plot.getRight());
+    }
+
     const int bins = D7SChannelStripFullAudioProcessor::numSpectrumBins;
-    const float w = bounds.getWidth() / (float) bins;
-    for (int i = 0; i < bins; ++i)
+    juce::Path fillPath;
+    juce::Path linePath;
+
+    auto pointForBin = [&] (int i)
     {
         const float db = processor.getSpectrumBinDb (i);
-        const float n = juce::jlimit (0.0f, 1.0f, (db + 80.0f) / 80.0f);
-        auto bar = juce::Rectangle<float> (bounds.getX() + i * w + 2.0f,
-                                           bounds.getBottom() - n * bounds.getHeight(),
-                                           w - 4.0f,
-                                           n * bounds.getHeight());
-        g.setColour (juce::Colour (90, 160, 220));
-        g.fillRoundedRectangle (bar, 2.0f);
+        const float n = juce::jlimit (0.0f, 1.0f, (db + 86.0f) / 86.0f);
+        const float x = plot.getX() + plot.getWidth() * ((float) i / (float) juce::jmax (1, bins - 1));
+        const float y = plot.getBottom() - std::pow (n, 0.72f) * plot.getHeight();
+        return juce::Point<float> (x, y);
+    };
+
+    auto first = pointForBin (0);
+    linePath.startNewSubPath (first);
+    fillPath.startNewSubPath (first.x, plot.getBottom());
+    fillPath.lineTo (first);
+
+    for (int i = 1; i < bins; ++i)
+    {
+        auto p = pointForBin (i);
+        linePath.lineTo (p);
+        fillPath.lineTo (p);
     }
+
+    auto last = pointForBin (bins - 1);
+    fillPath.lineTo (last.x, plot.getBottom());
+    fillPath.closeSubPath();
+
+    g.setGradientFill (juce::ColourGradient (juce::Colour (80, 210, 255).withAlpha (0.42f), plot.getCentreX(), plot.getY(),
+                                             juce::Colour (60, 120, 255).withAlpha (0.08f), plot.getCentreX(), plot.getBottom(), false));
+    g.fillPath (fillPath);
+
+    g.setColour (juce::Colour (92, 214, 255).withAlpha (0.94f));
+    g.strokePath (linePath, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     g.setColour (juce::Colours::white.withAlpha (0.65f));
     g.setFont (11.0f);
@@ -87,7 +121,8 @@ D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor
     scale50Button .onClick = [this] { setUIScale (0.50f); };
     scale25Button .onClick = [this] { setUIScale (0.25f); };
 
-    for (auto* m : { &noiseGate, &eq4k, &comp76, &comp2a, &tube, &esser }) content.addAndMakeVisible (*m);
+    for (auto* m : { &noiseGate, &eq4k, &comp76, &comp2a, &tube, &esser })
+        content.addAndMakeVisible (*m);
 
     setupSlider (rackInput, "Rack In", "rack_input");
     setupSlider (rackOutput, "Rack Out", "rack_output");
@@ -142,6 +177,8 @@ D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor
 
     connectRackButton (noiseGate, "noisegt1_bypass"); connectRackButton (eq4k, "eq4k_bypass"); connectRackButton (comp76, "comp76_bypass");
     connectRackButton (comp2a, "comp2a_bypass"); connectRackButton (tube, "tube_bypass"); connectRackButton (esser, "esser_bypass");
+    installModuleDragHandlers();
+    commitModuleOrderToProcessor();
 
     syncRackVisuals(); syncChoiceButtons(); updateScaleButtonStates();
     startTimerHz (15);
@@ -154,7 +191,8 @@ void D7SChannelStripFullAudioProcessorEditor::setUIScale (float newScale)
 {
     uiScale = juce::jlimit (0.25f, 1.0f, newScale);
     setSize ((int) std::round (designWidth * uiScale), (int) std::round (designHeight * uiScale) + 38);
-    updateScaleButtonStates(); resized();
+    updateScaleButtonStates();
+    resized();
 }
 
 void D7SChannelStripFullAudioProcessorEditor::updateScaleButtonStates()
@@ -198,7 +236,8 @@ void D7SChannelStripFullAudioProcessorEditor::setupChoiceButtons (std::array<juc
 {
     for (int i = 0; i < (int) buttons.size(); ++i)
     {
-        buttons[(size_t) i].setButtonText (labels[i]); content.addAndMakeVisible (buttons[(size_t) i]);
+        buttons[(size_t) i].setButtonText (labels[i]);
+        content.addAndMakeVisible (buttons[(size_t) i]);
         buttons[(size_t) i].onClick = [this, paramID, i] { setChoiceValue (paramID, i); };
     }
 }
@@ -207,7 +246,8 @@ void D7SChannelStripFullAudioProcessorEditor::setupChoiceButtons (std::array<juc
 {
     for (int i = 0; i < (int) buttons.size(); ++i)
     {
-        buttons[(size_t) i].setButtonText (labels[i]); content.addAndMakeVisible (buttons[(size_t) i]);
+        buttons[(size_t) i].setButtonText (labels[i]);
+        content.addAndMakeVisible (buttons[(size_t) i]);
         buttons[(size_t) i].onClick = [this, paramID, i] { setChoiceValue (paramID, i); };
     }
 }
@@ -227,7 +267,8 @@ void D7SChannelStripFullAudioProcessorEditor::syncChoiceButtons()
     auto sync = [this] (auto& buttons, const char* id)
     {
         int active = 0;
-        if (auto* v = audioProcessor.getAPVTS().getRawParameterValue (id)) active = (int) std::round (v->load());
+        if (auto* v = audioProcessor.getAPVTS().getRawParameterValue (id))
+            active = (int) std::round (v->load());
         for (int i = 0; i < (int) buttons.size(); ++i)
         {
             buttons[(size_t) i].setClickingTogglesState (false);
@@ -236,7 +277,9 @@ void D7SChannelStripFullAudioProcessorEditor::syncChoiceButtons()
             buttons[(size_t) i].setColour (juce::TextButton::textColourOffId, juce::Colours::white);
         }
     };
-    sync (comp76RatioButtons, "comp76_ratio"); sync (comp2aModeButtons, "comp2a_mode"); sync (esserModeButtons, "esser_mode");
+    sync (comp76RatioButtons, "comp76_ratio");
+    sync (comp2aModeButtons, "comp2a_mode");
+    sync (esserModeButtons, "esser_mode");
 }
 
 void D7SChannelStripFullAudioProcessorEditor::connectRackButton (RackModuleComponent& module, const juce::String& bypassParamID)
@@ -260,6 +303,123 @@ void D7SChannelStripFullAudioProcessorEditor::syncRackVisuals()
     };
     syncOne (noiseGate, "noisegt1_bypass"); syncOne (eq4k, "eq4k_bypass"); syncOne (comp76, "comp76_bypass");
     syncOne (comp2a, "comp2a_bypass"); syncOne (tube, "tube_bypass"); syncOne (esser, "esser_bypass");
+}
+
+void D7SChannelStripFullAudioProcessorEditor::installModuleDragHandlers()
+{
+    auto install = [this] (RackModuleComponent& module)
+    {
+        module.onDragStart = [this] (RackModuleComponent* m, const juce::MouseEvent&)
+        {
+            draggingModule = m;
+            if (m != nullptr)
+                m->toFront (false);
+        };
+
+        module.onDragMove = [this] (RackModuleComponent* m, const juce::MouseEvent& e)
+        {
+            if (m == nullptr)
+                return;
+
+            const int moduleId = getModuleIdForComponent (m);
+            if (moduleId < 0)
+                return;
+
+            auto contentEvent = e.getEventRelativeTo (&content);
+            const int targetSlot = getSlotForMousePosition (contentEvent.getPosition());
+            if (targetSlot >= 0)
+                moveModuleToSlot (moduleId, targetSlot);
+        };
+
+        module.onDragEnd = [this] (RackModuleComponent*, const juce::MouseEvent&)
+        {
+            draggingModule = nullptr;
+            commitModuleOrderToProcessor();
+            resized();
+        };
+    };
+
+    install (noiseGate); install (eq4k); install (comp76); install (comp2a); install (tube); install (esser);
+}
+
+int D7SChannelStripFullAudioProcessorEditor::getModuleIdForComponent (RackModuleComponent* module) const noexcept
+{
+    if (module == &noiseGate) return D7SChannelStripFullAudioProcessor::moduleNoiseGT1;
+    if (module == &eq4k)      return D7SChannelStripFullAudioProcessor::moduleEQ4K;
+    if (module == &comp76)    return D7SChannelStripFullAudioProcessor::module76;
+    if (module == &comp2a)    return D7SChannelStripFullAudioProcessor::module2A;
+    if (module == &tube)      return D7SChannelStripFullAudioProcessor::moduleTube;
+    if (module == &esser)     return D7SChannelStripFullAudioProcessor::moduleEsser;
+    return -1;
+}
+
+RackModuleComponent* D7SChannelStripFullAudioProcessorEditor::getModuleHeaderForId (int moduleId) noexcept
+{
+    switch (moduleId)
+    {
+        case D7SChannelStripFullAudioProcessor::moduleNoiseGT1: return &noiseGate;
+        case D7SChannelStripFullAudioProcessor::moduleEQ4K:     return &eq4k;
+        case D7SChannelStripFullAudioProcessor::module76:       return &comp76;
+        case D7SChannelStripFullAudioProcessor::module2A:       return &comp2a;
+        case D7SChannelStripFullAudioProcessor::moduleTube:     return &tube;
+        case D7SChannelStripFullAudioProcessor::moduleEsser:    return &esser;
+        default: return nullptr;
+    }
+}
+
+int D7SChannelStripFullAudioProcessorEditor::getSlotForMousePosition (juce::Point<int> contentPoint) const noexcept
+{
+    for (int i = 0; i < D7SChannelStripFullAudioProcessor::numRackModules; ++i)
+    {
+        if (moduleSlotBounds[(size_t) i].expanded (8, 120).contains (contentPoint))
+            return i;
+    }
+
+    for (int i = 0; i < D7SChannelStripFullAudioProcessor::numRackModules; ++i)
+    {
+        if (contentPoint.x < moduleSlotBounds[(size_t) i].getCentreX())
+            return i;
+    }
+
+    return D7SChannelStripFullAudioProcessor::numRackModules - 1;
+}
+
+void D7SChannelStripFullAudioProcessorEditor::moveModuleToSlot (int moduleId, int targetSlot)
+{
+    targetSlot = juce::jlimit (0, D7SChannelStripFullAudioProcessor::numRackModules - 1, targetSlot);
+
+    int currentSlot = -1;
+    for (int i = 0; i < D7SChannelStripFullAudioProcessor::numRackModules; ++i)
+    {
+        if (editorModuleOrder[(size_t) i] == moduleId)
+        {
+            currentSlot = i;
+            break;
+        }
+    }
+
+    if (currentSlot < 0 || currentSlot == targetSlot)
+        return;
+
+    if (currentSlot < targetSlot)
+    {
+        for (int i = currentSlot; i < targetSlot; ++i)
+            editorModuleOrder[(size_t) i] = editorModuleOrder[(size_t) i + 1];
+    }
+    else
+    {
+        for (int i = currentSlot; i > targetSlot; --i)
+            editorModuleOrder[(size_t) i] = editorModuleOrder[(size_t) i - 1];
+    }
+
+    editorModuleOrder[(size_t) targetSlot] = moduleId;
+    commitModuleOrderToProcessor();
+    resized();
+}
+
+void D7SChannelStripFullAudioProcessorEditor::commitModuleOrderToProcessor()
+{
+    audioProcessor.setModuleOrder (editorModuleOrder);
 }
 
 void D7SChannelStripFullAudioProcessorEditor::timerCallback()
@@ -309,6 +469,12 @@ void D7SChannelStripFullAudioProcessorEditor::resized()
         control.slider.setBounds (r);
     };
 
+    auto panelHeader = [] (juce::Rectangle<int>& panel, RackModuleComponent& module)
+    {
+        module.setBounds (panel.removeFromTop (56));
+        panel.removeFromTop (8);
+    };
+
     auto header = area.removeFromTop (120);
     auto rackControls = header.removeFromLeft (315);
     for (auto* control : { &rackInput, &rackOutput, &rackMix })
@@ -324,102 +490,139 @@ void D7SChannelStripFullAudioProcessorEditor::resized()
     spectrumView.setBounds (header.reduced (8, 0));
     area.removeFromTop (10);
 
-    auto modules = area;
-    const int gap = 10;
-    auto noisePanel = modules.removeFromLeft (180); modules.removeFromLeft (gap);
-    auto eqPanel    = modules.removeFromLeft (390); modules.removeFromLeft (gap);
-    auto comp76Panel= modules.removeFromLeft (230); modules.removeFromLeft (gap);
-    auto comp2aPanel= modules.removeFromLeft (260); modules.removeFromLeft (gap);
-    auto tubePanel  = modules.removeFromLeft (250); modules.removeFromLeft (gap);
-    auto esserPanel = modules.removeFromLeft (260);
-
-    auto panelHeader = [] (juce::Rectangle<int>& panel, RackModuleComponent& module)
+    auto getPanelWidth = [] (int moduleId)
     {
-        module.setBounds (panel.removeFromTop (56));
-        panel.removeFromTop (8);
+        switch (moduleId)
+        {
+            case D7SChannelStripFullAudioProcessor::moduleNoiseGT1: return 180;
+            case D7SChannelStripFullAudioProcessor::moduleEQ4K:     return 390;
+            case D7SChannelStripFullAudioProcessor::module76:       return 230;
+            case D7SChannelStripFullAudioProcessor::module2A:       return 260;
+            case D7SChannelStripFullAudioProcessor::moduleTube:     return 250;
+            case D7SChannelStripFullAudioProcessor::moduleEsser:    return 260;
+            default: return 220;
+        }
     };
 
-    panelHeader (noisePanel, noiseGate);
-    layoutKnobLocal (noiseSuppression, noisePanel.removeFromTop (96).withWidth (86));
-    noiseBypassButton.setBounds (noisePanel.removeFromTop (28)); noisePanel.removeFromTop (8);
-    noiseMeterLabel.setBounds (noisePanel.removeFromTop (20));
-    noiseGrMeter.setBounds (noisePanel.removeFromTop (16));
+    auto layoutModuleById = [&] (int moduleId, juce::Rectangle<int> panel)
+    {
+        switch (moduleId)
+        {
+            case D7SChannelStripFullAudioProcessor::moduleNoiseGT1:
+            {
+                panelHeader (panel, noiseGate);
+                layoutKnobLocal (noiseSuppression, panel.removeFromTop (96).withWidth (86));
+                noiseBypassButton.setBounds (panel.removeFromTop (28)); panel.removeFromTop (8);
+                noiseMeterLabel.setBounds (panel.removeFromTop (20));
+                noiseGrMeter.setBounds (panel.removeFromTop (16));
+                break;
+            }
+            case D7SChannelStripFullAudioProcessor::moduleEQ4K:
+            {
+                panelHeader (panel, eq4k);
+                auto filterRow = panel.removeFromTop (105);
+                layoutKnobLocal (eqHpf, nextRowLeft (filterRow));
+                layoutKnobLocal (eqLpf, nextRowLeft (filterRow));
+                eqBypassButton.setBounds (filterRow.removeFromLeft (90).withHeight (28));
+                panel.removeFromTop (8);
 
-    panelHeader (eqPanel, eq4k);
-    auto filterRow = eqPanel.removeFromTop (105);
-    layoutKnobLocal (eqHpf, nextRowLeft (filterRow));
-    layoutKnobLocal (eqLpf, nextRowLeft (filterRow));
-    eqBypassButton.setBounds (filterRow.removeFromLeft (90).withHeight (28));
-    eqPanel.removeFromTop (8);
+                auto hfRow = panel.removeFromTop (105);
+                layoutKnobLocal (eqHfGain, nextRowLeft (hfRow));
+                layoutKnobLocal (eqHfFreq, nextRowLeft (hfRow));
+                eqHfBellButton.setBounds (hfRow.removeFromLeft (90).withHeight (28));
+                panel.removeFromTop (8);
 
-    auto hfRow = eqPanel.removeFromTop (105);
-    layoutKnobLocal (eqHfGain, nextRowLeft (hfRow));
-    layoutKnobLocal (eqHfFreq, nextRowLeft (hfRow));
-    eqHfBellButton.setBounds (hfRow.removeFromLeft (90).withHeight (28));
-    eqPanel.removeFromTop (8);
+                auto hmfRow = panel.removeFromTop (105);
+                layoutKnobLocal (eqHmfGain, nextRowLeft (hmfRow));
+                layoutKnobLocal (eqHmfFreq, nextRowLeft (hmfRow));
+                layoutKnobLocal (eqHmfQ, nextRowLeft (hmfRow));
+                panel.removeFromTop (8);
 
-    auto hmfRow = eqPanel.removeFromTop (105);
-    layoutKnobLocal (eqHmfGain, nextRowLeft (hmfRow));
-    layoutKnobLocal (eqHmfFreq, nextRowLeft (hmfRow));
-    layoutKnobLocal (eqHmfQ, nextRowLeft (hmfRow));
-    eqPanel.removeFromTop (8);
+                auto lmfRow = panel.removeFromTop (105);
+                layoutKnobLocal (eqLmfGain, nextRowLeft (lmfRow));
+                layoutKnobLocal (eqLmfFreq, nextRowLeft (lmfRow));
+                layoutKnobLocal (eqLmfQ, nextRowLeft (lmfRow));
+                panel.removeFromTop (8);
 
-    auto lmfRow = eqPanel.removeFromTop (105);
-    layoutKnobLocal (eqLmfGain, nextRowLeft (lmfRow));
-    layoutKnobLocal (eqLmfFreq, nextRowLeft (lmfRow));
-    layoutKnobLocal (eqLmfQ, nextRowLeft (lmfRow));
-    eqPanel.removeFromTop (8);
+                auto lfRow = panel.removeFromTop (105);
+                layoutKnobLocal (eqLfGain, nextRowLeft (lfRow));
+                layoutKnobLocal (eqLfFreq, nextRowLeft (lfRow));
+                eqLfBellButton.setBounds (lfRow.removeFromLeft (90).withHeight (28));
+                break;
+            }
+            case D7SChannelStripFullAudioProcessor::module76:
+            {
+                panelHeader (panel, comp76);
+                auto c76Top = panel.removeFromTop (105);
+                layoutKnobLocal (comp76Input, nextRowLeft (c76Top));
+                layoutKnobLocal (comp76Output, nextRowLeft (c76Top));
+                auto c76Mid = panel.removeFromTop (105);
+                layoutKnobLocal (comp76Attack, nextRowLeft (c76Mid));
+                layoutKnobLocal (comp76Release, nextRowLeft (c76Mid));
+                comp76BypassButton.setBounds (panel.removeFromTop (28)); panel.removeFromTop (8);
+                auto ratioArea = panel.removeFromTop (30);
+                for (auto& b : comp76RatioButtons) { b.setBounds (ratioArea.removeFromLeft (40)); ratioArea.removeFromLeft (4); }
+                panel.removeFromTop (8);
+                comp76MeterLabel.setBounds (panel.removeFromTop (20));
+                comp76GrMeter.setBounds (panel.removeFromTop (16));
+                break;
+            }
+            case D7SChannelStripFullAudioProcessor::module2A:
+            {
+                panelHeader (panel, comp2a);
+                auto c2aTop = panel.removeFromTop (105);
+                layoutKnobLocal (comp2aPeak, nextRowLeft (c2aTop));
+                layoutKnobLocal (comp2aGain, nextRowLeft (c2aTop));
+                auto c2aMid = panel.removeFromTop (105);
+                layoutKnobLocal (comp2aEmphasis, nextRowLeft (c2aMid));
+                layoutKnobLocal (comp2aMix, nextRowLeft (c2aMid));
+                comp2aBypassButton.setBounds (panel.removeFromTop (28)); panel.removeFromTop (8);
+                auto mode2a = panel.removeFromTop (30); for (auto& b : comp2aModeButtons) { b.setBounds (mode2a.removeFromLeft (78)); mode2a.removeFromLeft (6); }
+                panel.removeFromTop (8);
+                comp2aMeterLabel.setBounds (panel.removeFromTop (20));
+                comp2aGrMeter.setBounds (panel.removeFromTop (16));
+                break;
+            }
+            case D7SChannelStripFullAudioProcessor::moduleTube:
+            {
+                panelHeader (panel, tube);
+                auto tubeTop = panel.removeFromTop (105);
+                layoutKnobLocal (tubeBeauty, nextRowLeft (tubeTop));
+                layoutKnobLocal (tubeBeast, nextRowLeft (tubeTop));
+                auto tubeMid = panel.removeFromTop (105);
+                layoutKnobLocal (tubeSensitivity, nextRowLeft (tubeMid));
+                layoutKnobLocal (tubeMix, nextRowLeft (tubeMid));
+                tubeBypassButton.setBounds (panel.removeFromTop (28));
+                break;
+            }
+            case D7SChannelStripFullAudioProcessor::moduleEsser:
+            {
+                panelHeader (panel, esser);
+                auto esTop = panel.removeFromTop (105);
+                layoutKnobLocal (esserThreshold, nextRowLeft (esTop));
+                layoutKnobLocal (esserFreq, nextRowLeft (esTop));
+                auto esMid = panel.removeFromTop (105);
+                layoutKnobLocal (esserRange, nextRowLeft (esMid));
+                esserBypassButton.setBounds (esMid.removeFromLeft (120).withHeight (28));
+                auto modeEsser = panel.removeFromTop (30); for (auto& b : esserModeButtons) { b.setBounds (modeEsser.removeFromLeft (82)); modeEsser.removeFromLeft (6); }
+                panel.removeFromTop (8);
+                esserMeterLabel.setBounds (panel.removeFromTop (20));
+                esserGrMeter.setBounds (panel.removeFromTop (16));
+                break;
+            }
+            default: break;
+        }
+    };
 
-    auto lfRow = eqPanel.removeFromTop (105);
-    layoutKnobLocal (eqLfGain, nextRowLeft (lfRow));
-    layoutKnobLocal (eqLfFreq, nextRowLeft (lfRow));
-    eqLfBellButton.setBounds (lfRow.removeFromLeft (90).withHeight (28));
-
-    panelHeader (comp76Panel, comp76);
-    auto c76Top = comp76Panel.removeFromTop (105);
-    layoutKnobLocal (comp76Input, nextRowLeft (c76Top));
-    layoutKnobLocal (comp76Output, nextRowLeft (c76Top));
-    auto c76Mid = comp76Panel.removeFromTop (105);
-    layoutKnobLocal (comp76Attack, nextRowLeft (c76Mid));
-    layoutKnobLocal (comp76Release, nextRowLeft (c76Mid));
-    comp76BypassButton.setBounds (comp76Panel.removeFromTop (28)); comp76Panel.removeFromTop (8);
-    auto ratioArea = comp76Panel.removeFromTop (30);
-    for (auto& b : comp76RatioButtons) { b.setBounds (ratioArea.removeFromLeft (40)); ratioArea.removeFromLeft (4); }
-    comp76Panel.removeFromTop (8);
-    comp76MeterLabel.setBounds (comp76Panel.removeFromTop (20));
-    comp76GrMeter.setBounds (comp76Panel.removeFromTop (16));
-
-    panelHeader (comp2aPanel, comp2a);
-    auto c2aTop = comp2aPanel.removeFromTop (105);
-    layoutKnobLocal (comp2aPeak, nextRowLeft (c2aTop));
-    layoutKnobLocal (comp2aGain, nextRowLeft (c2aTop));
-    auto c2aMid = comp2aPanel.removeFromTop (105);
-    layoutKnobLocal (comp2aEmphasis, nextRowLeft (c2aMid));
-    layoutKnobLocal (comp2aMix, nextRowLeft (c2aMid));
-    comp2aBypassButton.setBounds (comp2aPanel.removeFromTop (28)); comp2aPanel.removeFromTop (8);
-    auto mode2a = comp2aPanel.removeFromTop (30); for (auto& b : comp2aModeButtons) { b.setBounds (mode2a.removeFromLeft (78)); mode2a.removeFromLeft (6); }
-    comp2aPanel.removeFromTop (8);
-    comp2aMeterLabel.setBounds (comp2aPanel.removeFromTop (20));
-    comp2aGrMeter.setBounds (comp2aPanel.removeFromTop (16));
-
-    panelHeader (tubePanel, tube);
-    auto tubeTop = tubePanel.removeFromTop (105);
-    layoutKnobLocal (tubeBeauty, nextRowLeft (tubeTop));
-    layoutKnobLocal (tubeBeast, nextRowLeft (tubeTop));
-    auto tubeMid = tubePanel.removeFromTop (105);
-    layoutKnobLocal (tubeSensitivity, nextRowLeft (tubeMid));
-    layoutKnobLocal (tubeMix, nextRowLeft (tubeMid));
-    tubeBypassButton.setBounds (tubePanel.removeFromTop (28));
-
-    panelHeader (esserPanel, esser);
-    auto esTop = esserPanel.removeFromTop (105);
-    layoutKnobLocal (esserThreshold, nextRowLeft (esTop));
-    layoutKnobLocal (esserFreq, nextRowLeft (esTop));
-    auto esMid = esserPanel.removeFromTop (105);
-    layoutKnobLocal (esserRange, nextRowLeft (esMid));
-    esserBypassButton.setBounds (esMid.removeFromLeft (120).withHeight (28));
-    auto modeEsser = esserPanel.removeFromTop (30); for (auto& b : esserModeButtons) { b.setBounds (modeEsser.removeFromLeft (82)); modeEsser.removeFromLeft (6); }
-    esserPanel.removeFromTop (8);
-    esserMeterLabel.setBounds (esserPanel.removeFromTop (20));
-    esserGrMeter.setBounds (esserPanel.removeFromTop (16));
+    auto modules = area;
+    const int gap = 10;
+    for (int slot = 0; slot < D7SChannelStripFullAudioProcessor::numRackModules; ++slot)
+    {
+        const int moduleId = editorModuleOrder[(size_t) slot];
+        const int width = getPanelWidth (moduleId);
+        auto panel = modules.removeFromLeft (width);
+        moduleSlotBounds[(size_t) slot] = panel;
+        layoutModuleById (moduleId, panel);
+        modules.removeFromLeft (gap);
+    }
 }
