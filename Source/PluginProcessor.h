@@ -85,6 +85,8 @@ private:
 
     void cacheParameterPointers();
     void syncAnalyzerParameters() noexcept;
+    void updateTotalLatency() noexcept;
+    int getModuleLatency (int moduleId) const noexcept;
     void pushSpectrumSample (float sample) noexcept;
     void pushPreSpectrumSample (float sample) noexcept;
     void pushPostSpectrumSample (float sample) noexcept;
