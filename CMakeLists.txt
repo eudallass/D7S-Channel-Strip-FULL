@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(D7SChannelStripFull VERSION 0.1.7)
+project(D7SChannelStripFull VERSION 0.1.8)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,6 +30,7 @@ target_sources(D7SChannelStripFull
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/Modules/NoiseGT1Processor.cpp
+        Source/Modules/DelayGlideProcessor.cpp
 )
 
 target_compile_definitions(D7SChannelStripFull
