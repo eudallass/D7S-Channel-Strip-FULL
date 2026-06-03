@@ -4,7 +4,8 @@ namespace
 {
     static juce::String formatFrequency (float hz)
     {
-        if (hz >= 1000.0f) return juce::String (hz / 1000.0f, 1) + " kHz";
+        if (hz >= 1000.0f)
+            return juce::String (hz / 1000.0f, 1) + " kHz";
         return juce::String ((int) std::round (hz)) + " Hz";
     }
 
@@ -85,37 +86,41 @@ void SpectrumDisplay::updateButtonColours()
 
 void SpectrumDisplay::showSettingsMenu()
 {
-    juce::PopupMenu menu;
-    menu.setLookAndFeel (&getLookAndFeel());
+    juce::PopupMenu resolution;
+    resolution.addItem (100, "Low");
+    resolution.addItem (101, "Medium");
+    resolution.addItem (102, "High");
+    resolution.addItem (103, "Maximum");
 
+    juce::PopupMenu speed;
+    speed.addItem (200, "Very Fast");
+    speed.addItem (201, "Fast");
+    speed.addItem (202, "Medium");
+    speed.addItem (203, "Slow");
+    speed.addItem (204, "Very Slow");
+
+    juce::PopupMenu range;
+    range.addItem (300, "60 dB");
+    range.addItem (301, "90 dB");
+    range.addItem (302, "120 dB");
+
+    juce::PopupMenu menu;
     menu.addSectionHeader ("Analyzer Settings");
-    menu.addSubMenu ("Resolution", juce::PopupMenu()
-        .addItem (100, "Low")
-        .addItem (101, "Medium")
-        .addItem (102, "High")
-        .addItem (103, "Maximum"));
-    menu.addSubMenu ("Speed", juce::PopupMenu()
-        .addItem (200, "Very Fast")
-        .addItem (201, "Fast")
-        .addItem (202, "Medium")
-        .addItem (203, "Slow")
-        .addItem (204, "Very Slow"));
-    menu.addSubMenu ("Range", juce::PopupMenu()
-        .addItem (300, "60 dB")
-        .addItem (301, "90 dB")
-        .addItem (302, "120 dB"));
+    menu.addSubMenu ("Resolution", resolution);
+    menu.addSubMenu ("Speed", speed);
+    menu.addSubMenu ("Range", range);
     menu.addSeparator();
     menu.addItem (400, "Freeze", true, processor.getAnalyzerState().freeze.load());
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton), [this] (int result)
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&settingsButton), [this] (int result)
     {
         auto& apvts = processor.getAPVTS();
-        auto setChoice = [&apvts] (const char* id, int index)
+        auto setNormalised = [&apvts] (const char* id, float normalised)
         {
             if (auto* p = apvts.getParameter (id))
             {
                 p->beginChangeGesture();
-                p->setValueNotifyingHost (p->convertTo0to1 ((float) index));
+                p->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, normalised));
                 p->endChangeGesture();
             }
         };
@@ -124,13 +129,15 @@ void SpectrumDisplay::showSettingsMenu()
             if (auto* p = apvts.getParameter (id))
             {
                 const float next = p->getValue() > 0.5f ? 0.0f : 1.0f;
-                p->beginChangeGesture(); p->setValueNotifyingHost (next); p->endChangeGesture();
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (next);
+                p->endChangeGesture();
             }
         };
 
-        if (result >= 100 && result <= 103) setChoice ("analyzer_resolution", result - 100);
-        else if (result >= 200 && result <= 204) setChoice ("analyzer_speed", result - 200);
-        else if (result >= 300 && result <= 302) setChoice ("analyzer_range", result - 300);
+        if (result >= 100 && result <= 103) setNormalised ("analyzer_resolution", (float) (result - 100) / 3.0f);
+        else if (result >= 200 && result <= 204) setNormalised ("analyzer_speed", (float) (result - 200) / 4.0f);
+        else if (result >= 300 && result <= 302) setNormalised ("analyzer_range", (float) (result - 300) / 2.0f);
         else if (result == 400) toggleBool ("analyzer_freeze");
     });
 }
@@ -200,11 +207,6 @@ juce::Path SpectrumDisplay::buildSpectrumPath (bool post, juce::Rectangle<float>
         const float y = dbToY (juce::jlimit (minRelativeDb(), maxRelativeDb(), db), plot);
 
         if (i == 0)
-            path.startNewSubPath (x, closeToBottom ? plot.getBottom() : y);
-
-        if (closeToBottom && i == 0)
-            path.lineTo (x, y);
-        else if (i == 0)
             path.startNewSubPath (x, y);
         else
             path.lineTo (x, y);
@@ -213,7 +215,9 @@ juce::Path SpectrumDisplay::buildSpectrumPath (bool post, juce::Rectangle<float>
     if (closeToBottom)
     {
         const float lastX = frequencyToX (binToFrequency (AnalyzerState::numBins - 1), plot);
+        const float firstX = frequencyToX (binToFrequency (0), plot);
         path.lineTo (lastX, plot.getBottom());
+        path.lineTo (firstX, plot.getBottom());
         path.closeSubPath();
     }
 
