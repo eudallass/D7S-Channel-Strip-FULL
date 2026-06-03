@@ -41,8 +41,8 @@ namespace
 
     static double spectrumFrequencyForIndex (int index)
     {
-        const double minHz = 30.0;
-        const double maxHz = 20000.0;
+        const double minHz = 25.0;
+        const double maxHz = 21000.0;
         const double normalised = (double) index / (double) D7SChannelStripFullAudioProcessor::numSpectrumBins;
         return minHz * std::pow (maxHz / minHz, normalised);
     }
@@ -54,6 +54,8 @@ D7SChannelStripFullAudioProcessor::D7SChannelStripFullAudioProcessor()
         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "D7S_PARAMETERS", createParameterLayout())
 {
+    for (int i = 0; i < numRackModules; ++i)
+        rackModuleOrder[(size_t) i].store (i);
 }
 
 D7SChannelStripFullAudioProcessor::~D7SChannelStripFullAudioProcessor() {}
@@ -127,6 +129,20 @@ void D7SChannelStripFullAudioProcessor::setCurrentProgram (int) {}
 const juce::String D7SChannelStripFullAudioProcessor::getProgramName (int) { return {}; }
 void D7SChannelStripFullAudioProcessor::changeProgramName (int, const juce::String&) {}
 
+void D7SChannelStripFullAudioProcessor::setModuleOrder (const std::array<int, numRackModules>& newOrder) noexcept
+{
+    for (int i = 0; i < numRackModules; ++i)
+        rackModuleOrder[(size_t) i].store (juce::jlimit (0, numRackModules - 1, newOrder[(size_t) i]));
+}
+
+std::array<int, D7SChannelStripFullAudioProcessor::numRackModules> D7SChannelStripFullAudioProcessor::getModuleOrder() const noexcept
+{
+    std::array<int, numRackModules> result {};
+    for (int i = 0; i < numRackModules; ++i)
+        result[(size_t) i] = rackModuleOrder[(size_t) i].load();
+    return result;
+}
+
 float D7SChannelStripFullAudioProcessor::getSpectrumBinDb (int index) const noexcept
 {
     if (index < 0 || index >= numSpectrumBins)
@@ -191,157 +207,175 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
     double outputPeak = 0.0;
     double max76Gr = 0.0, max2aGr = 0.0, maxEsserGr = 0.0;
 
+    juce::AudioBuffer<FloatType> rackDry (buffer.getNumChannels(), numSamples);
+
     for (int ch = 0; ch < numCh; ++ch)
     {
         auto* data = buffer.getWritePointer (ch);
+        auto* dry = rackDry.getWritePointer (ch);
         for (int i = 0; i < numSamples; ++i)
         {
             data[i] = (FloatType) ((double) data[i] * rackIn);
+            dry[i] = data[i];
             inputPeak = juce::jmax (inputPeak, std::abs ((double) data[i]));
         }
     }
 
-    noiseGT1.setSuppressionAmount (getParam (apvts, "noisegt1_suppression", 50.0f) / 100.0f);
-    noiseGT1.setBypass (getBoolParam (apvts, "noisegt1_bypass"));
-    noiseGT1.process (buffer);
+    const auto order = getModuleOrder();
 
-    const bool eqOn = ! getBoolParam (apvts, "eq4k_bypass", true);
-    const double hpfCoeff = onePoleCoeff (getParam (apvts, "eq4k_hpf", 20.0f), currentSampleRate);
-    const double lpfCoeff = onePoleCoeff (getParam (apvts, "eq4k_lpf", 22000.0f), currentSampleRate);
-    const double lfCoeff = onePoleCoeff (getParam (apvts, "eq4k_lf_freq", 80.0f), currentSampleRate);
-    const double lmfFreq = getParam (apvts, "eq4k_lmf_freq", 600.0f);
-    const double lmfQ = getParam (apvts, "eq4k_lmf_q", 1.0f);
-    const double hmfFreq = getParam (apvts, "eq4k_hmf_freq", 3000.0f);
-    const double hmfQ = getParam (apvts, "eq4k_hmf_q", 1.0f);
-    const double hfCoeff = onePoleCoeff (getParam (apvts, "eq4k_hf_freq", 10000.0f), currentSampleRate);
-    const double lfGain = juce::Decibels::decibelsToGain ((double) getParam (apvts, "eq4k_lf_gain"));
-    const double lmfGain = juce::Decibels::decibelsToGain ((double) getParam (apvts, "eq4k_lmf_gain"));
-    const double hmfGain = juce::Decibels::decibelsToGain ((double) getParam (apvts, "eq4k_hmf_gain"));
-    const double hfGain = juce::Decibels::decibelsToGain ((double) getParam (apvts, "eq4k_hf_gain"));
-    const bool lfBell = getBoolParam (apvts, "eq4k_lf_bell");
-    const bool hfBell = getBoolParam (apvts, "eq4k_hf_bell");
-    const double lmfLowCoeff = onePoleCoeff (lmfFreq / juce::jmax (lmfQ, 0.4), currentSampleRate);
-    const double lmfHighCoeff = onePoleCoeff (lmfFreq * juce::jmax (lmfQ, 0.4), currentSampleRate);
-    const double hmfLowCoeff = onePoleCoeff (hmfFreq / juce::jmax (hmfQ, 0.4), currentSampleRate);
-    const double hmfHighCoeff = onePoleCoeff (hmfFreq * juce::jmax (hmfQ, 0.4), currentSampleRate);
-
-    const bool comp76On = ! getBoolParam (apvts, "comp76_bypass", true);
-    const double c76Input = juce::Decibels::decibelsToGain (-18.0 + getParam (apvts, "comp76_input") * 4.2);
-    const double c76Output = juce::Decibels::decibelsToGain (-18.0 + getParam (apvts, "comp76_output") * 3.6);
-    const double c76Attack = smoothCoeffMs (0.02 + (7.0 - getParam (apvts, "comp76_attack", 3.0f)) * 1.15, currentSampleRate);
-    const double c76Release = smoothCoeffMs (40.0 + (7.0 - getParam (apvts, "comp76_release", 5.0f)) * 180.0, currentSampleRate);
-    const int ratioIndex = getChoiceParam (apvts, "comp76_ratio", 0);
-    const double ratio = ratioIndex == 0 ? 4.0 : ratioIndex == 1 ? 8.0 : ratioIndex == 2 ? 12.0 : ratioIndex == 3 ? 20.0 : 30.0;
-
-    const bool comp2aOn = ! getBoolParam (apvts, "comp2a_bypass", true);
-    const double c2aPeak = getParam (apvts, "comp2a_peak") / 100.0;
-    const double c2aGain = juce::Decibels::decibelsToGain (-12.0 + getParam (apvts, "comp2a_gain") * 0.36);
-    const bool c2aLimit = getChoiceParam (apvts, "comp2a_mode", 0) == 1;
-    const double c2aEmphasis = getParam (apvts, "comp2a_emphasis") / 100.0;
-    const double c2aMix = getParam (apvts, "comp2a_mix", 100.0f) / 100.0;
-    const double c2aAttack = smoothCoeffMs (10.0, currentSampleRate);
-    const double c2aRelease = smoothCoeffMs (700.0, currentSampleRate);
-
-    const bool tubeOn = ! getBoolParam (apvts, "tube_bypass", true);
-    const double beauty = getParam (apvts, "tube_beauty") / 100.0;
-    const double beast = getParam (apvts, "tube_beast") / 100.0;
-    const double sens = juce::Decibels::decibelsToGain (-12.0 + getParam (apvts, "tube_sensitivity") * 0.24);
-    const double tubeMix = getParam (apvts, "tube_mix", 100.0f) / 100.0;
-    const double beautyCoeff = onePoleCoeff (2500.0, currentSampleRate);
-    const double beastCoeff = onePoleCoeff (220.0, currentSampleRate);
-
-    const bool esserOn = ! getBoolParam (apvts, "esser_bypass", true);
-    const double esserFreq = getParam (apvts, "esser_freq", 7000.0f);
-    const double esserThreshold = getParam (apvts, "esser_threshold", -24.0f);
-    const double esserRange = getParam (apvts, "esser_range", 12.0f);
-    const bool esserSplit = getChoiceParam (apvts, "esser_mode", 1) == 1;
-    const double esserCoeff = onePoleCoeff (esserFreq, currentSampleRate);
-    const double esserAtk = smoothCoeffMs (1.0, currentSampleRate);
-    const double esserRel = smoothCoeffMs (90.0, currentSampleRate);
-
-    for (int ch = 0; ch < numCh; ++ch)
+    auto processNoise = [&]
     {
-        auto* data = buffer.getWritePointer (ch);
-        for (int i = 0; i < numSamples; ++i)
+        noiseGT1.setSuppressionAmount (getParam (apvts, "noisegt1_suppression", 50.0f) / 100.0f);
+        noiseGT1.setBypass (getBoolParam (apvts, "noisegt1_bypass"));
+        noiseGT1.process (buffer);
+    };
+
+    auto processEQ = [&]
+    {
+        if (getBoolParam (apvts, "eq4k_bypass", true)) return;
+        const double hpfCoeff = onePoleCoeff (getParam (apvts, "eq4k_hpf", 20.0f), currentSampleRate);
+        const double lpfCoeff = onePoleCoeff (getParam (apvts, "eq4k_lpf", 22000.0f), currentSampleRate);
+        const double lfCoeff = onePoleCoeff (getParam (apvts, "eq4k_lf_freq", 80.0f), currentSampleRate);
+        const double lmfFreq = getParam (apvts, "eq4k_lmf_freq", 600.0f);
+        const double lmfQ = getParam (apvts, "eq4k_lmf_q", 1.0f);
+        const double hmfFreq = getParam (apvts, "eq4k_hmf_freq", 3000.0f);
+        const double hmfQ = getParam (apvts, "eq4k_hmf_q", 1.0f);
+        const double hfCoeff = onePoleCoeff (getParam (apvts, "eq4k_hf_freq", 10000.0f), currentSampleRate);
+        const double lfGain = juce::Decibels::decibelsToGain ((double) getParam (apvts, "eq4k_lf_gain"));
+        const double lmfGain = juce::Decibels::decibelsToGain ((double) getParam (apvts, "eq4k_lmf_gain"));
+        const double hmfGain = juce::Decibels::decibelsToGain ((double) getParam (apvts, "eq4k_hmf_gain"));
+        const double hfGain = juce::Decibels::decibelsToGain ((double) getParam (apvts, "eq4k_hf_gain"));
+        const bool lfBell = getBoolParam (apvts, "eq4k_lf_bell");
+        const bool hfBell = getBoolParam (apvts, "eq4k_hf_bell");
+        const double lmfLowCoeff = onePoleCoeff (lmfFreq / juce::jmax (lmfQ, 0.4), currentSampleRate);
+        const double lmfHighCoeff = onePoleCoeff (lmfFreq * juce::jmax (lmfQ, 0.4), currentSampleRate);
+        const double hmfLowCoeff = onePoleCoeff (hmfFreq / juce::jmax (hmfQ, 0.4), currentSampleRate);
+        const double hmfHighCoeff = onePoleCoeff (hmfFreq * juce::jmax (hmfQ, 0.4), currentSampleRate);
+
+        for (int ch = 0; ch < numCh; ++ch)
         {
-            const double rackDry = (double) data[i];
-            double x = rackDry;
-
-            if (eqOn)
+            auto* data = buffer.getWritePointer (ch);
+            for (int i = 0; i < numSamples; ++i)
             {
-                eqHpfState[ch] += hpfCoeff * (x - eqHpfState[ch]);
-                x -= eqHpfState[ch];
-                eqLpfState[ch] += lpfCoeff * (x - eqLpfState[ch]);
-                x = eqLpfState[ch];
-
+                double x = (double) data[i];
+                eqHpfState[ch] += hpfCoeff * (x - eqHpfState[ch]); x -= eqHpfState[ch];
+                eqLpfState[ch] += lpfCoeff * (x - eqLpfState[ch]); x = eqLpfState[ch];
                 eqLfState[ch] += lfCoeff * (x - eqLfState[ch]);
-                eqLmfLow[ch] += lmfLowCoeff * (x - eqLmfLow[ch]);
-                eqLmfHigh[ch] += lmfHighCoeff * (x - eqLmfHigh[ch]);
-                eqHmfLow[ch] += hmfLowCoeff * (x - eqHmfLow[ch]);
-                eqHmfHigh[ch] += hmfHighCoeff * (x - eqHmfHigh[ch]);
+                eqLmfLow[ch] += lmfLowCoeff * (x - eqLmfLow[ch]); eqLmfHigh[ch] += lmfHighCoeff * (x - eqLmfHigh[ch]);
+                eqHmfLow[ch] += hmfLowCoeff * (x - eqHmfLow[ch]); eqHmfHigh[ch] += hmfHighCoeff * (x - eqHmfHigh[ch]);
                 eqHfState[ch] += hfCoeff * (x - eqHfState[ch]);
-
                 const double lfBand = lfBell ? (eqLfState[ch] - eqLmfLow[ch]) : eqLfState[ch];
                 const double lmfBand = eqLmfHigh[ch] - eqLmfLow[ch];
                 const double hmfBand = eqHmfHigh[ch] - eqHmfLow[ch];
                 const double hfBand = hfBell ? (eqHfState[ch] - eqHmfHigh[ch]) : (x - eqHfState[ch]);
-
-                x += lfBand * (lfGain - 1.0)
-                   + lmfBand * (lmfGain - 1.0)
-                   + hmfBand * (hmfGain - 1.0)
-                   + hfBand * (hfGain - 1.0);
-                x = std::tanh (x * 1.015) / std::tanh (1.015);
+                x += lfBand * (lfGain - 1.0) + lmfBand * (lmfGain - 1.0) + hmfBand * (hmfGain - 1.0) + hfBand * (hfGain - 1.0);
+                data[i] = (FloatType) (std::tanh (x * 1.015) / std::tanh (1.015));
             }
+        }
+    };
 
-            if (comp76On)
+    auto process76 = [&]
+    {
+        if (getBoolParam (apvts, "comp76_bypass", true)) return;
+        const double c76Input = juce::Decibels::decibelsToGain (-18.0 + getParam (apvts, "comp76_input") * 4.2);
+        const double c76Output = juce::Decibels::decibelsToGain (-18.0 + getParam (apvts, "comp76_output") * 3.6);
+        const double c76Attack = smoothCoeffMs (0.02 + (7.0 - getParam (apvts, "comp76_attack", 3.0f)) * 1.15, currentSampleRate);
+        const double c76Release = smoothCoeffMs (40.0 + (7.0 - getParam (apvts, "comp76_release", 5.0f)) * 180.0, currentSampleRate);
+        const int ratioIndex = getChoiceParam (apvts, "comp76_ratio", 0);
+        const double ratio = ratioIndex == 0 ? 4.0 : ratioIndex == 1 ? 8.0 : ratioIndex == 2 ? 12.0 : ratioIndex == 3 ? 20.0 : 30.0;
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            auto* data = buffer.getWritePointer (ch);
+            for (int i = 0; i < numSamples; ++i)
             {
-                x *= c76Input;
+                double x = (double) data[i] * c76Input;
                 const double det = std::abs (x);
                 const double coeff = det > comp76Env[ch] ? c76Attack : c76Release;
                 comp76Env[ch] += coeff * (det - comp76Env[ch]);
-                const double envDb = peakDbFromLinear (comp76Env[ch]);
-                const double over = envDb - (-24.0);
+                const double over = peakDbFromLinear (comp76Env[ch]) - (-24.0);
                 const double grDb = over > 0.0 ? over * (1.0 - (1.0 / ratio)) : 0.0;
                 max76Gr = juce::jmax (max76Gr, grDb);
                 x *= juce::Decibels::decibelsToGain (-grDb);
                 x = std::tanh (x * (ratioIndex == 4 ? 1.45 : 1.15)) / std::tanh (ratioIndex == 4 ? 1.45 : 1.15);
-                x *= c76Output;
+                data[i] = (FloatType) (x * c76Output);
             }
+        }
+    };
 
-            if (comp2aOn)
+    auto process2A = [&]
+    {
+        if (getBoolParam (apvts, "comp2a_bypass", true)) return;
+        const double c2aPeak = getParam (apvts, "comp2a_peak") / 100.0;
+        const double c2aGain = juce::Decibels::decibelsToGain (-12.0 + getParam (apvts, "comp2a_gain") * 0.36);
+        const bool c2aLimit = getChoiceParam (apvts, "comp2a_mode", 0) == 1;
+        const double c2aEmphasis = getParam (apvts, "comp2a_emphasis") / 100.0;
+        const double c2aMix = getParam (apvts, "comp2a_mix", 100.0f) / 100.0;
+        const double c2aAttack = smoothCoeffMs (10.0, currentSampleRate);
+        const double c2aRelease = smoothCoeffMs (700.0, currentSampleRate);
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            auto* data = buffer.getWritePointer (ch);
+            for (int i = 0; i < numSamples; ++i)
             {
-                const double dry2a = x;
-                const double detectorBoost = 1.0 + c2aEmphasis * 1.5;
-                const double detDb = peakDbFromLinear (std::abs (x) * detectorBoost);
+                const double dry2a = (double) data[i];
+                const double detDb = peakDbFromLinear (std::abs (dry2a) * (1.0 + c2aEmphasis * 1.5));
                 const double threshold = -8.0 - c2aPeak * 36.0;
                 const double slope = c2aLimit ? 0.78 : 0.52;
                 const double target = detDb > threshold ? (detDb - threshold) * slope : 0.0;
                 const double coeff = target > comp2aEnv[ch] ? c2aAttack : c2aRelease;
                 comp2aEnv[ch] += coeff * (target - comp2aEnv[ch]);
                 max2aGr = juce::jmax (max2aGr, comp2aEnv[ch]);
-                double wet = x * juce::Decibels::decibelsToGain (-comp2aEnv[ch]);
+                double wet = dry2a * juce::Decibels::decibelsToGain (-comp2aEnv[ch]);
                 wet = std::tanh (wet * 1.05) / std::tanh (1.05);
                 wet *= c2aGain;
-                x = dry2a * (1.0 - c2aMix) + wet * c2aMix;
+                data[i] = (FloatType) (dry2a * (1.0 - c2aMix) + wet * c2aMix);
             }
+        }
+    };
 
-            if (tubeOn)
+    auto processTube = [&]
+    {
+        if (getBoolParam (apvts, "tube_bypass", true)) return;
+        const double beauty = getParam (apvts, "tube_beauty") / 100.0;
+        const double beast = getParam (apvts, "tube_beast") / 100.0;
+        const double sens = juce::Decibels::decibelsToGain (-12.0 + getParam (apvts, "tube_sensitivity") * 0.24);
+        const double tubeMix = getParam (apvts, "tube_mix", 100.0f) / 100.0;
+        const double beautyCoeff = onePoleCoeff (2500.0, currentSampleRate);
+        const double beastCoeff = onePoleCoeff (220.0, currentSampleRate);
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            auto* data = buffer.getWritePointer (ch);
+            for (int i = 0; i < numSamples; ++i)
             {
-                const double dryTube = x;
-                double driven = x * sens;
+                const double dryTube = (double) data[i];
+                const double driven = dryTube * sens;
                 tubeBeautyState[ch] += beautyCoeff * (driven - tubeBeautyState[ch]);
                 tubeBeastState[ch] += beastCoeff * (driven - tubeBeastState[ch]);
-                const double beautyBand = driven - tubeBeautyState[ch];
-                const double beastBand = tubeBeastState[ch];
-                const double beautyWet = std::tanh (beautyBand * (1.0 + beauty * 5.0));
-                const double beastWet = std::tanh (beastBand * (1.0 + beast * 12.0));
+                const double beautyWet = std::tanh ((driven - tubeBeautyState[ch]) * (1.0 + beauty * 5.0));
+                const double beastWet = std::tanh (tubeBeastState[ch] * (1.0 + beast * 12.0));
                 double wetTube = driven + beautyWet * beauty * 0.45 + beastWet * beast * 0.65;
                 wetTube *= juce::Decibels::decibelsToGain (-(beauty * 1.5 + beast * 3.0));
-                x = dryTube * (1.0 - tubeMix) + wetTube * tubeMix;
+                data[i] = (FloatType) (dryTube * (1.0 - tubeMix) + wetTube * tubeMix);
             }
+        }
+    };
 
-            if (esserOn)
+    auto processEsser = [&]
+    {
+        if (getBoolParam (apvts, "esser_bypass", true)) return;
+        const double esserFreq = getParam (apvts, "esser_freq", 7000.0f);
+        const double esserThreshold = getParam (apvts, "esser_threshold", -24.0f);
+        const double esserRange = getParam (apvts, "esser_range", 12.0f);
+        const bool esserSplit = getChoiceParam (apvts, "esser_mode", 1) == 1;
+        const double esserCoeff = onePoleCoeff (esserFreq, currentSampleRate);
+        const double esserAtk = smoothCoeffMs (1.0, currentSampleRate);
+        const double esserRel = smoothCoeffMs (90.0, currentSampleRate);
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            auto* data = buffer.getWritePointer (ch);
+            for (int i = 0; i < numSamples; ++i)
             {
+                double x = (double) data[i];
                 esserLp[ch] += esserCoeff * (x - esserLp[ch]);
                 const double sib = x - esserLp[ch];
                 const double level = std::abs (sib);
@@ -351,10 +385,32 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
                 const double reductionDb = juce::jlimit (0.0, esserRange, over > 0.0 ? over * 0.75 : 0.0);
                 maxEsserGr = juce::jmax (maxEsserGr, reductionDb);
                 const double gr = juce::Decibels::decibelsToGain (-reductionDb);
-                x = esserSplit ? (x - sib + sib * gr) : (x * gr);
+                data[i] = (FloatType) (esserSplit ? (x - sib + sib * gr) : (x * gr));
             }
+        }
+    };
 
-            x = rackDry * (1.0 - rackMix) + x * rackMix;
+    for (int slot = 0; slot < numRackModules; ++slot)
+    {
+        switch (order[(size_t) slot])
+        {
+            case moduleNoiseGT1: processNoise(); break;
+            case moduleEQ4K:     processEQ();    break;
+            case module76:       process76();    break;
+            case module2A:       process2A();    break;
+            case moduleTube:     processTube();  break;
+            case moduleEsser:    processEsser(); break;
+            default: break;
+        }
+    }
+
+    for (int ch = 0; ch < numCh; ++ch)
+    {
+        auto* data = buffer.getWritePointer (ch);
+        auto* dry = rackDry.getReadPointer (ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            double x = (double) dry[i] * (1.0 - rackMix) + (double) data[i] * rackMix;
             x *= rackOut;
             outputPeak = juce::jmax (outputPeak, std::abs (x));
 
@@ -365,7 +421,7 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
                 spectrumLp[(size_t) bin] += coeff * (x - spectrumLp[(size_t) bin]);
                 const double band = spectrumLp[(size_t) bin] - previousLow;
                 previousLow = spectrumLp[(size_t) bin];
-                spectrumEnergy[(size_t) bin] += 0.002 * ((band * band) - spectrumEnergy[(size_t) bin]);
+                spectrumEnergy[(size_t) bin] += 0.006 * ((band * band) - spectrumEnergy[(size_t) bin]);
             }
 
             data[i] = (FloatType) juce::jlimit (-4.0, 4.0, x);
