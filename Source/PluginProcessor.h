@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <atomic>
 #include "Modules/NoiseGT1Processor.h"
@@ -8,7 +9,9 @@
 class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
 {
 public:
-    static constexpr int numSpectrumBins = 48;
+    static constexpr int spectrumOrder = 11;
+    static constexpr int spectrumFFTSize = 1 << spectrumOrder;
+    static constexpr int numSpectrumBins = 96;
     static constexpr int numRackModules = 6;
 
     enum ModuleIndex
@@ -74,6 +77,8 @@ private:
     template <typename FloatType>
     void processAudioBlock (juce::AudioBuffer<FloatType>& buffer);
 
+    void pushSpectrumSample (float sample) noexcept;
+    void runSpectrumFFT() noexcept;
     void resetInternalStates();
 
     juce::AudioProcessorValueTreeState apvts;
@@ -102,9 +107,14 @@ private:
     std::array<double, 8> esserLp  {};
     std::array<double, 8> esserEnv {};
 
-    std::array<double, numSpectrumBins + 1> spectrumLp {};
-    std::array<double, numSpectrumBins> spectrumEnergy {};
+    juce::dsp::FFT spectrumFFT { spectrumOrder };
+    juce::dsp::WindowingFunction<float> spectrumWindow { spectrumFFTSize, juce::dsp::WindowingFunction<float>::hann, false };
+    std::array<float, spectrumFFTSize> spectrumFifo {};
+    std::array<float, spectrumFFTSize * 2> spectrumFftData {};
+    std::array<float, numSpectrumBins> spectrumSmoothedDb {};
+    std::array<float, numSpectrumBins> spectrumPeakDb {};
     std::array<std::atomic<float>, numSpectrumBins> spectrumBinsDb {};
+    int spectrumFifoIndex { 0 };
 
     std::atomic<float> rackInputPeakDb  { -120.0f };
     std::atomic<float> rackOutputPeakDb { -120.0f };
