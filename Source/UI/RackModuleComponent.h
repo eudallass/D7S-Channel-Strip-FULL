@@ -23,6 +23,9 @@ public:
     }
 
     std::function<void(bool)> onEnabledChanged;
+    std::function<void(RackModuleComponent*, const juce::MouseEvent&)> onDragStart;
+    std::function<void(RackModuleComponent*, const juce::MouseEvent&)> onDragMove;
+    std::function<void(RackModuleComponent*, const juce::MouseEvent&)> onDragEnd;
 
     void paint (juce::Graphics& g) override
     {
@@ -35,24 +38,28 @@ public:
         g.drawRoundedRectangle (area.reduced (1.0f), 8.0f, 2.0f);
 
         g.setColour (enabled ? juce::Colours::white : juce::Colours::grey);
-        g.setFont (22.0f);
-        g.drawText (name, getLocalBounds().reduced (20, 0), juce::Justification::centredLeft);
+        g.setFont (19.0f);
+        g.drawText (name, getLocalBounds().reduced (16, 0), juce::Justification::centredLeft);
 
-        auto buttonArea = getLocalBounds().removeFromRight (110).reduced (20, 18);
+        auto buttonArea = getBypassButtonArea();
 
         g.setColour (enabled ? juce::Colour (25, 90, 45) : juce::Colours::darkred);
         g.fillRoundedRectangle (buttonArea.toFloat(), 6.0f);
 
         g.setColour (juce::Colours::white);
-        g.setFont (14.0f);
+        g.setFont (13.0f);
         g.drawText (enabled ? "ACTIVE" : "BYPASS", buttonArea, juce::Justification::centred);
+
+        // Small visual grip: this header is draggable for rack order.
+        auto grip = getLocalBounds().removeFromLeft (10).reduced (3, 15);
+        g.setColour (juce::Colours::white.withAlpha (0.28f));
+        for (int y = grip.getY(); y < grip.getBottom(); y += 6)
+            g.fillEllipse ((float) grip.getX(), (float) y, 3.0f, 3.0f);
     }
 
     void mouseDown (const juce::MouseEvent& event) override
     {
-        auto buttonArea = getLocalBounds().removeFromRight (110).reduced (20, 18);
-
-        if (buttonArea.contains (event.getPosition()))
+        if (getBypassButtonArea().contains (event.getPosition()))
         {
             enabled = ! enabled;
 
@@ -60,10 +67,34 @@ public:
                 onEnabledChanged (enabled);
 
             repaint();
+            return;
         }
+
+        draggingHeader = true;
+        if (onDragStart)
+            onDragStart (this, event);
+    }
+
+    void mouseDrag (const juce::MouseEvent& event) override
+    {
+        if (draggingHeader && onDragMove)
+            onDragMove (this, event);
+    }
+
+    void mouseUp (const juce::MouseEvent& event) override
+    {
+        if (draggingHeader && onDragEnd)
+            onDragEnd (this, event);
+        draggingHeader = false;
     }
 
 private:
+    juce::Rectangle<int> getBypassButtonArea() const
+    {
+        return getLocalBounds().removeFromRight (92).reduced (14, 17);
+    }
+
     juce::String name;
     bool enabled = true;
+    bool draggingHeader = false;
 };
