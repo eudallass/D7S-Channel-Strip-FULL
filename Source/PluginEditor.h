@@ -38,7 +38,6 @@ private:
         bool grMode { false };
     };
 
-    // Kept as a temporary compatibility shim while SpectrumDisplay replaces the old analyzer.
     class SpectrumView : public juce::Component
     {
     public:
@@ -129,6 +128,7 @@ private:
     ParamSlider eqHmfQ;
     ParamSlider eqHfFreq;
     ParamSlider eqHfGain;
+    ParamSlider eqDrive;
     juce::ToggleButton eqLfBellButton;
     juce::ToggleButton eqHfBellButton;
     juce::ToggleButton eqBypassButton;
