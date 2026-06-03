@@ -52,6 +52,7 @@ private:
     void setupSlider (ParamSlider& control, const juce::String& labelText, const juce::String& paramID);
     void setupBypassButton (juce::ToggleButton& button, const juce::String& text, const juce::String& paramID, std::unique_ptr<ButtonAttachment>& attachment);
     void setupChoiceButtons (std::array<juce::TextButton, 5>& buttons, const juce::StringArray& labels, const juce::String& paramID);
+    void setupChoiceButtons (std::array<juce::TextButton, 3>& buttons, const juce::StringArray& labels, const juce::String& paramID);
     void setupChoiceButtons (std::array<juce::TextButton, 2>& buttons, const juce::StringArray& labels, const juce::String& paramID);
     void setChoiceValue (const juce::String& paramID, int index);
     void syncChoiceButtons();
@@ -86,7 +87,8 @@ private:
         D7SChannelStripFullAudioProcessor::module76,
         D7SChannelStripFullAudioProcessor::module2A,
         D7SChannelStripFullAudioProcessor::moduleTube,
-        D7SChannelStripFullAudioProcessor::moduleEsser
+        D7SChannelStripFullAudioProcessor::moduleEsser,
+        D7SChannelStripFullAudioProcessor::moduleDelay
     };
     std::array<juce::Rectangle<int>, D7SChannelStripFullAudioProcessor::numRackModules> moduleSlotBounds {};
     RackModuleComponent* draggingModule { nullptr };
@@ -97,6 +99,7 @@ private:
     RackModuleComponent comp2a    { "D7S 2A" };
     RackModuleComponent tube      { "D7S Tube" };
     RackModuleComponent esser     { "D7S Esser" };
+    RackModuleComponent delay     { "D7S Delay" };
 
     ParamSlider rackInput;
     ParamSlider rackOutput;
@@ -166,6 +169,17 @@ private:
     HorizontalMeter esserGrMeter;
     juce::ToggleButton esserBypassButton;
     std::unique_ptr<ButtonAttachment> esserBypassAttachment;
+
+    ParamSlider delayMix;
+    ParamSlider delayFeedback;
+    ParamSlider delayGlideTime;
+    std::array<juce::TextButton, 5> delayTimeButtonsA { juce::TextButton { "1/32" }, juce::TextButton { "1/16" }, juce::TextButton { "1/8" }, juce::TextButton { "1/4" }, juce::TextButton { "1/2" } };
+    std::array<juce::TextButton, 5> delayTimeButtonsB { juce::TextButton { "1/1" }, juce::TextButton { "1/8T" }, juce::TextButton { "1/4T" }, juce::TextButton { "1/8D" }, juce::TextButton { "1/4D" } };
+    std::array<juce::TextButton, 3> delayDirectionButtons { juce::TextButton { "Up" }, juce::TextButton { "Down" }, juce::TextButton { "Random" } };
+    juce::ToggleButton delayGlideButton;
+    juce::ToggleButton delayBypassButton;
+    std::unique_ptr<ButtonAttachment> delayGlideAttachment;
+    std::unique_ptr<ButtonAttachment> delayBypassAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (D7SChannelStripFullAudioProcessorEditor)
 };
