@@ -1,5 +1,19 @@
 #include "NoiseGT1Processor.h"
 
+namespace
+{
+    static float readParam (std::atomic<float>* p, float fallback) noexcept
+    {
+        return p != nullptr ? p->load() : fallback;
+    }
+}
+
+void NoiseGT1Processor::cacheParameters (juce::AudioProcessorValueTreeState& apvts)
+{
+    suppressionParam = apvts.getRawParameterValue ("noisegt1_suppression");
+    bypassParam = apvts.getRawParameterValue ("noisegt1_bypass");
+}
+
 void NoiseGT1Processor::prepare (double sr, int /*samplesPerBlock*/, int numCh)
 {
     sampleRate  = sr;
@@ -14,6 +28,9 @@ void NoiseGT1Processor::prepare (double sr, int /*samplesPerBlock*/, int numCh)
     gainAttackCoeff  = computeAttackCoeff  (2.0f,   sr);
     gainReleaseCoeff = computeReleaseCoeff (120.0f, sr);
 
+    bypassWet.reset (sr, 0.015);
+    suppressionSmooth.reset (sr, 0.020);
+
     reset();
 }
 
@@ -22,33 +39,36 @@ void NoiseGT1Processor::reset()
     signalEnvelope.fill (0.0f);
     noiseFloorEstimate.fill (1e-6f);
     currentGain = 1.0f;
+    suppressionSmooth.setCurrentAndTargetValue (readParam (suppressionParam, suppressionAmount * 100.0f) / 100.0f);
+    bypassWet.setCurrentAndTargetValue (readParam (bypassParam, bypassed ? 1.0f : 0.0f) > 0.5f ? 0.0f : 1.0f);
     gainReductionDb.store (0.0f);
 }
 
 void NoiseGT1Processor::setSuppressionAmount (float zeroToOne)
 {
     suppressionAmount = juce::jlimit (0.0f, 1.0f, zeroToOne);
+    suppressionSmooth.setTargetValue (suppressionAmount);
 }
 
 void NoiseGT1Processor::setBypass (bool shouldBypass)
 {
     bypassed = shouldBypass;
+    bypassWet.setTargetValue (shouldBypass ? 0.0f : 1.0f);
 }
 
 template <typename FloatType>
-void NoiseGT1Processor::process (juce::AudioBuffer<FloatType>& buffer)
+void NoiseGT1Processor::processInternal (juce::AudioBuffer<FloatType>& buffer)
 {
-    if (bypassed)
-    {
-        gainReductionDb.store (0.0f);
-        return;
-    }
+    setSuppressionAmount (readParam (suppressionParam, suppressionAmount * 100.0f) / 100.0f);
+    setBypass (readParam (bypassParam, bypassed ? 1.0f : 0.0f) > 0.5f);
 
     const int numSamples = buffer.getNumSamples();
     const int numCh      = juce::jmin (buffer.getNumChannels(), numChannels);
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
+        suppressionAmount = suppressionSmooth.getNextValue();
+        const float wetMix = bypassWet.getNextValue();
         float maxSignalEnv = 0.0f;
         float maxNoiseEnv  = 0.0f;
 
@@ -66,7 +86,6 @@ void NoiseGT1Processor::process (juce::AudioBuffer<FloatType>& buffer)
             const float noise  = juce::jmax (noiseFloorEstimate[ch], 1e-9f);
             const float signalToNoise = signal / noise;
 
-            // Follow low-level material more confidently, but avoid chasing clear foreground signal.
             if (signalToNoise < 5.0f || signal < computeThreshold() * 2.0f)
             {
                 if (absVal > noiseFloorEstimate[ch])
@@ -93,23 +112,21 @@ void NoiseGT1Processor::process (juce::AudioBuffer<FloatType>& buffer)
         for (int ch = 0; ch < numCh; ++ch)
         {
             auto* channelData = buffer.getWritePointer (ch);
-            channelData[sample] = (FloatType) (channelData[sample] * currentGain);
+            const FloatType dry = channelData[sample];
+            const FloatType wet = (FloatType) (dry * currentGain);
+            channelData[sample] = (FloatType) (dry * (1.0f - wetMix) + wet * wetMix);
         }
     }
 
-    const float grDb = (currentGain > 1e-6f)
-                       ? -20.0f * std::log10 (currentGain)
-                       : 72.0f;
+    const float grDb = (currentGain > 1e-6f) ? -20.0f * std::log10 (currentGain) : 72.0f;
     gainReductionDb.store (juce::jlimit (0.0f, 72.0f, grDb));
 }
 
-template void NoiseGT1Processor::process<float>  (juce::AudioBuffer<float>&);
-template void NoiseGT1Processor::process<double> (juce::AudioBuffer<double>&);
+void NoiseGT1Processor::process (juce::AudioBuffer<float>& buffer)  { processInternal (buffer); }
+void NoiseGT1Processor::process (juce::AudioBuffer<double>& buffer) { processInternal (buffer); }
 
 float NoiseGT1Processor::computeThreshold() const noexcept
 {
-    // V2: more usable range. At full suppression the detector starts acting around -18 dBFS,
-    // instead of needing the source to be extremely quiet.
     const float shaped = std::pow (juce::jlimit (0.0f, 1.0f, suppressionAmount), 0.65f);
     const float threshDb = -78.0f + shaped * 60.0f;
     return juce::Decibels::decibelsToGain (threshDb);
@@ -122,9 +139,6 @@ float NoiseGT1Processor::computeGainTarget (float signalRms, float noiseRms) con
         return 1.0f;
 
     const float threshold = computeThreshold();
-
-    // Adaptive floor: higher Suppression means the noise floor has more influence,
-    // but the absolute threshold keeps the processor useful on quiet recordings.
     const float floorMultiplier = 2.0f + amount * 18.0f;
     const float effectiveThreshold = juce::jmax (threshold, noiseRms * floorMultiplier);
 
@@ -132,15 +146,10 @@ float NoiseGT1Processor::computeGainTarget (float signalRms, float noiseRms) con
         return 1.0f;
 
     const float ratio = juce::jlimit (0.0f, 1.0f, signalRms / juce::jmax (effectiveThreshold, 1e-9f));
-
-    // Soft expansion curve. More suppression means steeper gain reduction.
     const float exponent = 1.15f + amount * 3.25f;
     float gainTarget = std::pow (ratio, exponent);
-
-    // Range grows with suppression. This makes max setting audibly useful without becoming binary too early.
     const float maxReductionDb = 12.0f + amount * 48.0f;
     const float minGain = juce::Decibels::decibelsToGain (-maxReductionDb);
-
     return juce::jlimit (minGain, 1.0f, gainTarget);
 }
 
