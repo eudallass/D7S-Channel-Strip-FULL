@@ -13,7 +13,7 @@ public:
     void process (juce::AudioBuffer<float>& buffer) override;
     void process (juce::AudioBuffer<double>& buffer) override;
     void setBypass (bool shouldBypass) override;
-    int getLatencySamples() const override { return oversampleLatency; }
+    int getLatencySamples() const noexcept override { return oversampleLatency; }
     const juce::String getIdentifier() const override { return "tube"; }
 
     void cacheParameters (juce::AudioProcessorValueTreeState& apvts);
