@@ -13,7 +13,7 @@ public:
     static constexpr int spectrumOrder = 11;
     static constexpr int spectrumFFTSize = 1 << spectrumOrder;
     static constexpr int numSpectrumBins = 96;
-    static constexpr int numRackModules = 6;
+    static constexpr int numRackModules = 7;
 
     enum ModuleIndex
     {
@@ -22,7 +22,8 @@ public:
         module76       = 2,
         module2A       = 3,
         moduleTube     = 4,
-        moduleEsser    = 5
+        moduleEsser    = 5,
+        moduleDelay    = 6
     };
 
     D7SChannelStripFullAudioProcessor();
