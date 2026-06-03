@@ -5,6 +5,7 @@
 #include <array>
 #include "PluginProcessor.h"
 #include "UI/RackModuleComponent.h"
+#include "UI/SpectrumDisplay.h"
 
 class D7SChannelStripFullAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                 private juce::Timer
@@ -35,15 +36,6 @@ private:
     private:
         float dbValue { -120.0f };
         bool grMode { false };
-    };
-
-    class SpectrumView : public juce::Component
-    {
-    public:
-        explicit SpectrumView (D7SChannelStripFullAudioProcessor& p) : processor (p) {}
-        void paint (juce::Graphics& g) override;
-    private:
-        D7SChannelStripFullAudioProcessor& processor;
     };
 
     void setUIScale (float newScale);
@@ -107,7 +99,7 @@ private:
     juce::Label rackMeterLabel;
     HorizontalMeter rackInMeter;
     HorizontalMeter rackOutMeter;
-    SpectrumView spectrumView { audioProcessor };
+    SpectrumDisplay spectrumView { audioProcessor };
 
     ParamSlider noiseSuppression;
     juce::Label noiseMeterLabel;
