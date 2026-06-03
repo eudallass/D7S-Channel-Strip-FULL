@@ -26,10 +26,16 @@ juce_add_plugin(D7SChannelStripFull
 
 target_sources(D7SChannelStripFull
     PRIVATE
-        Source/PluginProcessor.cpp
+        Source/PluginProcessor_Tier1.cpp
         Source/PluginEditor.cpp
+        Source/Core/ParameterLayout.cpp
         Source/Core/ModuleChain.cpp
         Source/Modules/NoiseGT1Processor.cpp
+        Source/Modules/EQ4KProcessor.cpp
+        Source/Modules/Comp76Processor.cpp
+        Source/Modules/Comp2AProcessor.cpp
+        Source/Modules/TubeProcessor.cpp
+        Source/Modules/EsserProcessor.cpp
         Source/Modules/DelayGlideProcessor.cpp
 )
 
