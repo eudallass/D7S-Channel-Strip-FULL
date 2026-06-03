@@ -114,6 +114,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "esser_mode", 1 }, "Esser Mode", juce::StringArray { "Wide", "Split" }, 1));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "esser_bypass", 1 }, "Esser Bypass", true));
 
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_mix", 1 }, "Delay Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 25.0f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_feedback", 1 }, "Delay Feedback", juce::NormalisableRange<float> (0.0f, 100.0f), 35.0f));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "delay_time", 1 }, "Delay Time", juce::StringArray { "1/32", "1/16", "1/8", "1/4", "1/2", "1/1", "1/8T", "1/4T", "1/8D", "1/4D" }, 3));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "delay_bypass", 1 }, "Delay Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "delay_glide_on", 1 }, "Delay Glide", false));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "delay_glide_direction", 1 }, "Delay Glide Direction", juce::StringArray { "Up", "Down", "Random" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_glide_time", 1 }, "Delay Glide Time", juce::NormalisableRange<float> (0.0f, 100.0f), 35.0f));
+
     return { params.begin(), params.end() };
 }
 
@@ -208,15 +216,16 @@ void D7SChannelStripFullAudioProcessor::runSpectrumFFT() noexcept
 
 void D7SChannelStripFullAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused (samplesPerBlock);
     currentSampleRate = sampleRate;
     noiseGT1.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
+    delayGlide.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
     resetInternalStates();
 }
 
 void D7SChannelStripFullAudioProcessor::releaseResources()
 {
     noiseGT1.reset();
+    delayGlide.reset();
     resetInternalStates();
 }
 
@@ -466,6 +475,24 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
             default: break;
         }
     }
+
+    double bpm = 120.0;
+    if (auto* playHead = getPlayHead())
+    {
+        juce::AudioPlayHead::CurrentPositionInfo info;
+        if (playHead->getCurrentPosition (info) && info.bpm > 0.0)
+            bpm = info.bpm;
+    }
+
+    delayGlide.setTempoBpm (bpm);
+    delayGlide.setMix (getParam (apvts, "delay_mix", 25.0f));
+    delayGlide.setFeedback (getParam (apvts, "delay_feedback", 35.0f));
+    delayGlide.setDelayDivision (getChoiceParam (apvts, "delay_time", 3));
+    delayGlide.setBypass (getBoolParam (apvts, "delay_bypass", true));
+    delayGlide.setGlideEnabled (getBoolParam (apvts, "delay_glide_on", false));
+    delayGlide.setGlideDirection (getChoiceParam (apvts, "delay_glide_direction", 0));
+    delayGlide.setGlideTime (getParam (apvts, "delay_glide_time", 35.0f));
+    delayGlide.process (buffer);
 
     for (int ch = 0; ch < numCh; ++ch)
     {
