@@ -130,7 +130,7 @@ const juce::String D7SChannelStripFullAudioProcessor::getName() const { return J
 bool D7SChannelStripFullAudioProcessor::acceptsMidi() const { return false; }
 bool D7SChannelStripFullAudioProcessor::producesMidi() const { return false; }
 bool D7SChannelStripFullAudioProcessor::isMidiEffect() const { return false; }
-double D7SChannelStripFullAudioProcessor::getTailLengthSeconds() const { return 0.0; }
+double D7SChannelStripFullAudioProcessor::getTailLengthSeconds() const { return 2.5; }
 int D7SChannelStripFullAudioProcessor::getNumPrograms() { return 1; }
 int D7SChannelStripFullAudioProcessor::getCurrentProgram() { return 0; }
 void D7SChannelStripFullAudioProcessor::setCurrentProgram (int) {}
@@ -153,15 +153,13 @@ std::array<int, D7SChannelStripFullAudioProcessor::numRackModules> D7SChannelStr
 
 float D7SChannelStripFullAudioProcessor::getSpectrumBinDb (int index) const noexcept
 {
-    if (index < 0 || index >= numSpectrumBins)
-        return -120.0f;
+    if (index < 0 || index >= numSpectrumBins) return -120.0f;
     return spectrumBinsDb[(size_t) index].load();
 }
 
 void D7SChannelStripFullAudioProcessor::pushSpectrumSample (float sample) noexcept
 {
     spectrumFifo[(size_t) spectrumFifoIndex++] = sample;
-
     if (spectrumFifoIndex >= spectrumFFTSize)
     {
         runSpectrumFFT();
@@ -173,7 +171,6 @@ void D7SChannelStripFullAudioProcessor::runSpectrumFFT() noexcept
 {
     std::fill (spectrumFftData.begin(), spectrumFftData.end(), 0.0f);
     std::copy (spectrumFifo.begin(), spectrumFifo.end(), spectrumFftData.begin());
-
     spectrumWindow.multiplyWithWindowingTable (spectrumFftData.data(), spectrumFFTSize);
     spectrumFFT.performFrequencyOnlyForwardTransform (spectrumFftData.data(), true);
 
@@ -205,11 +202,7 @@ void D7SChannelStripFullAudioProcessor::runSpectrumFFT() noexcept
         smooth += coeff * (targetDb - smooth);
 
         auto& peak = spectrumPeakDb[(size_t) band];
-        if (smooth > peak)
-            peak = smooth;
-        else
-            peak -= 0.55f;
-
+        if (smooth > peak) peak = smooth; else peak -= 0.55f;
         spectrumBinsDb[(size_t) band].store (juce::jmax (smooth, peak - 18.0f));
     }
 }
@@ -235,17 +228,10 @@ void D7SChannelStripFullAudioProcessor::resetInternalStates()
     eqLmfLow.fill (0.0); eqLmfHigh.fill (0.0); eqHmfLow.fill (0.0); eqHmfHigh.fill (0.0); eqHfState.fill (0.0);
     comp76Env.fill (0.0); comp2aEnv.fill (0.0); tubeBeautyState.fill (0.0); tubeBeastState.fill (0.0);
     esserLp.fill (0.0); esserEnv.fill (0.0);
-
-    spectrumFifo.fill (0.0f);
-    spectrumFftData.fill (0.0f);
-    spectrumSmoothedDb.fill (-96.0f);
-    spectrumPeakDb.fill (-96.0f);
-    spectrumFifoIndex = 0;
-
+    spectrumFifo.fill (0.0f); spectrumFftData.fill (0.0f); spectrumSmoothedDb.fill (-96.0f); spectrumPeakDb.fill (-96.0f); spectrumFifoIndex = 0;
     rackInputPeakDb.store (-120.0f); rackOutputPeakDb.store (-120.0f);
     comp76GainReductionDb.store (0.0f); comp2aGainReductionDb.store (0.0f); esserGainReductionDb.store (0.0f);
-    for (auto& bin : spectrumBinsDb)
-        bin.store (-96.0f);
+    for (auto& bin : spectrumBinsDb) bin.store (-96.0f);
 }
 
 bool D7SChannelStripFullAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -291,6 +277,13 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
             dry[i] = data[i];
             inputPeak = juce::jmax (inputPeak, std::abs ((double) data[i]));
         }
+    }
+
+    double bpm = 120.0;
+    if (auto* playHead = getPlayHead())
+    {
+        juce::AudioPlayHead::CurrentPositionInfo info;
+        if (playHead->getCurrentPosition (info) && info.bpm > 0.0) bpm = info.bpm;
     }
 
     const auto order = getModuleOrder();
@@ -462,6 +455,19 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
         }
     };
 
+    auto processDelay = [&]
+    {
+        delayGlide.setTempoBpm (bpm);
+        delayGlide.setMix (getParam (apvts, "delay_mix", 25.0f));
+        delayGlide.setFeedback (getParam (apvts, "delay_feedback", 35.0f));
+        delayGlide.setDelayDivision (getChoiceParam (apvts, "delay_time", 3));
+        delayGlide.setBypass (getBoolParam (apvts, "delay_bypass", true));
+        delayGlide.setGlideEnabled (getBoolParam (apvts, "delay_glide_on", false));
+        delayGlide.setGlideDirection (getChoiceParam (apvts, "delay_glide_direction", 0));
+        delayGlide.setGlideTime (getParam (apvts, "delay_glide_time", 35.0f));
+        delayGlide.process (buffer);
+    };
+
     for (int slot = 0; slot < numRackModules; ++slot)
     {
         switch (order[(size_t) slot])
@@ -472,27 +478,10 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
             case module2A:       process2A();    break;
             case moduleTube:     processTube();  break;
             case moduleEsser:    processEsser(); break;
+            case moduleDelay:    processDelay(); break;
             default: break;
         }
     }
-
-    double bpm = 120.0;
-    if (auto* playHead = getPlayHead())
-    {
-        juce::AudioPlayHead::CurrentPositionInfo info;
-        if (playHead->getCurrentPosition (info) && info.bpm > 0.0)
-            bpm = info.bpm;
-    }
-
-    delayGlide.setTempoBpm (bpm);
-    delayGlide.setMix (getParam (apvts, "delay_mix", 25.0f));
-    delayGlide.setFeedback (getParam (apvts, "delay_feedback", 35.0f));
-    delayGlide.setDelayDivision (getChoiceParam (apvts, "delay_time", 3));
-    delayGlide.setBypass (getBoolParam (apvts, "delay_bypass", true));
-    delayGlide.setGlideEnabled (getBoolParam (apvts, "delay_glide_on", false));
-    delayGlide.setGlideDirection (getChoiceParam (apvts, "delay_glide_direction", 0));
-    delayGlide.setGlideTime (getParam (apvts, "delay_glide_time", 35.0f));
-    delayGlide.process (buffer);
 
     for (int ch = 0; ch < numCh; ++ch)
     {
@@ -504,9 +493,7 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
             x *= rackOut;
             outputPeak = juce::jmax (outputPeak, std::abs (x));
             data[i] = (FloatType) juce::jlimit (-4.0, 4.0, x);
-
-            if (ch == 0)
-                pushSpectrumSample ((float) x);
+            if (ch == 0) pushSpectrumSample ((float) x);
         }
     }
 
