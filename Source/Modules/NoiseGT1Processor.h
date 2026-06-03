@@ -20,7 +20,7 @@ public:
     void cacheParameters (juce::AudioProcessorValueTreeState& apvts);
     void setSuppressionAmount (float zeroToOne);
     void setBypass (bool shouldBypass) override;
-    int getLatencySamples() const override { return lookaheadSamples; }
+    int getLatencySamples() const noexcept override { return lookaheadSamples; }
     const juce::String getIdentifier() const override { return "noisegt1"; }
 
     float getGainReductionDb() const noexcept { return gainReductionDb.load(); }
