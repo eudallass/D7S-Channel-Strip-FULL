@@ -13,6 +13,7 @@ public:
     void process (juce::AudioBuffer<float>& buffer) override;
     void process (juce::AudioBuffer<double>& buffer) override;
     void setBypass (bool shouldBypass) override;
+    int getLatencySamples() const override { return oversampleLatency; }
     const juce::String getIdentifier() const override { return "tube"; }
 
     void cacheParameters (juce::AudioProcessorValueTreeState& apvts);
@@ -30,6 +31,7 @@ private:
 
     double sr { 44100.0 };
     int channels { 2 };
+    int oversampleLatency { 0 };
     std::array<double, 8> beautyState {};
     std::array<double, 8> beastState {};
 
