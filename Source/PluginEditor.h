@@ -59,6 +59,13 @@ private:
     void syncRackVisuals();
     void timerCallback() override;
 
+    void installModuleDragHandlers();
+    int getModuleIdForComponent (RackModuleComponent* module) const noexcept;
+    RackModuleComponent* getModuleHeaderForId (int moduleId) noexcept;
+    int getSlotForMousePosition (juce::Point<int> contentPoint) const noexcept;
+    void moveModuleToSlot (int moduleId, int targetSlot);
+    void commitModuleOrderToProcessor();
+
     void layoutModuleControls (juce::Rectangle<int>& area,
                                RackModuleComponent& module,
                                std::initializer_list<ParamSlider*> sliders,
@@ -72,6 +79,17 @@ private:
     juce::TextButton scale75Button  { "75%" };
     juce::TextButton scale50Button  { "50%" };
     juce::TextButton scale25Button  { "25%" };
+
+    std::array<int, D7SChannelStripFullAudioProcessor::numRackModules> editorModuleOrder {
+        D7SChannelStripFullAudioProcessor::moduleNoiseGT1,
+        D7SChannelStripFullAudioProcessor::moduleEQ4K,
+        D7SChannelStripFullAudioProcessor::module76,
+        D7SChannelStripFullAudioProcessor::module2A,
+        D7SChannelStripFullAudioProcessor::moduleTube,
+        D7SChannelStripFullAudioProcessor::moduleEsser
+    };
+    std::array<juce::Rectangle<int>, D7SChannelStripFullAudioProcessor::numRackModules> moduleSlotBounds {};
+    RackModuleComponent* draggingModule { nullptr };
 
     RackModuleComponent noiseGate { "D7S NoiseGT1" };
     RackModuleComponent eq4k      { "D7S EQ 4K" };
