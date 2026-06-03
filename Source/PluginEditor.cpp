@@ -17,13 +17,6 @@ namespace
         return juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f);
     }
 
-    static void layoutKnob (D7SChannelStripFullAudioProcessorEditor::ParamSlider& control,
-                            juce::Rectangle<int> r)
-    {
-        control.label.setBounds (r.removeFromTop (18));
-        control.slider.setBounds (r);
-    }
-
     static juce::Rectangle<int> nextRowLeft (juce::Rectangle<int>& row, int width = 76)
     {
         auto r = row.removeFromLeft (width);
@@ -310,12 +303,18 @@ void D7SChannelStripFullAudioProcessorEditor::resized()
     content.setBounds (0, 38, designWidth, designHeight); content.setTransform (juce::AffineTransform::scale (uiScale));
     auto area = juce::Rectangle<int> (0, 0, designWidth, designHeight).reduced (18);
 
+    auto layoutKnobLocal = [] (auto& control, juce::Rectangle<int> r)
+    {
+        control.label.setBounds (r.removeFromTop (18));
+        control.slider.setBounds (r);
+    };
+
     auto header = area.removeFromTop (120);
     auto rackControls = header.removeFromLeft (315);
     for (auto* control : { &rackInput, &rackOutput, &rackMix })
     {
         auto group = rackControls.removeFromLeft (92);
-        layoutKnob (*control, group.removeFromTop (90));
+        layoutKnobLocal (*control, group.removeFromTop (90));
         rackControls.removeFromLeft (8);
     }
     auto meterArea = header.removeFromLeft (390);
@@ -341,48 +340,48 @@ void D7SChannelStripFullAudioProcessorEditor::resized()
     };
 
     panelHeader (noisePanel, noiseGate);
-    layoutKnob (noiseSuppression, noisePanel.removeFromTop (96).withWidth (86));
+    layoutKnobLocal (noiseSuppression, noisePanel.removeFromTop (96).withWidth (86));
     noiseBypassButton.setBounds (noisePanel.removeFromTop (28)); noisePanel.removeFromTop (8);
     noiseMeterLabel.setBounds (noisePanel.removeFromTop (20));
     noiseGrMeter.setBounds (noisePanel.removeFromTop (16));
 
     panelHeader (eqPanel, eq4k);
     auto filterRow = eqPanel.removeFromTop (105);
-    layoutKnob (eqHpf, nextRowLeft (filterRow));
-    layoutKnob (eqLpf, nextRowLeft (filterRow));
+    layoutKnobLocal (eqHpf, nextRowLeft (filterRow));
+    layoutKnobLocal (eqLpf, nextRowLeft (filterRow));
     eqBypassButton.setBounds (filterRow.removeFromLeft (90).withHeight (28));
     eqPanel.removeFromTop (8);
 
     auto hfRow = eqPanel.removeFromTop (105);
-    layoutKnob (eqHfGain, nextRowLeft (hfRow));
-    layoutKnob (eqHfFreq, nextRowLeft (hfRow));
+    layoutKnobLocal (eqHfGain, nextRowLeft (hfRow));
+    layoutKnobLocal (eqHfFreq, nextRowLeft (hfRow));
     eqHfBellButton.setBounds (hfRow.removeFromLeft (90).withHeight (28));
     eqPanel.removeFromTop (8);
 
     auto hmfRow = eqPanel.removeFromTop (105);
-    layoutKnob (eqHmfGain, nextRowLeft (hmfRow));
-    layoutKnob (eqHmfFreq, nextRowLeft (hmfRow));
-    layoutKnob (eqHmfQ, nextRowLeft (hmfRow));
+    layoutKnobLocal (eqHmfGain, nextRowLeft (hmfRow));
+    layoutKnobLocal (eqHmfFreq, nextRowLeft (hmfRow));
+    layoutKnobLocal (eqHmfQ, nextRowLeft (hmfRow));
     eqPanel.removeFromTop (8);
 
     auto lmfRow = eqPanel.removeFromTop (105);
-    layoutKnob (eqLmfGain, nextRowLeft (lmfRow));
-    layoutKnob (eqLmfFreq, nextRowLeft (lmfRow));
-    layoutKnob (eqLmfQ, nextRowLeft (lmfRow));
+    layoutKnobLocal (eqLmfGain, nextRowLeft (lmfRow));
+    layoutKnobLocal (eqLmfFreq, nextRowLeft (lmfRow));
+    layoutKnobLocal (eqLmfQ, nextRowLeft (lmfRow));
     eqPanel.removeFromTop (8);
 
     auto lfRow = eqPanel.removeFromTop (105);
-    layoutKnob (eqLfGain, nextRowLeft (lfRow));
-    layoutKnob (eqLfFreq, nextRowLeft (lfRow));
+    layoutKnobLocal (eqLfGain, nextRowLeft (lfRow));
+    layoutKnobLocal (eqLfFreq, nextRowLeft (lfRow));
     eqLfBellButton.setBounds (lfRow.removeFromLeft (90).withHeight (28));
 
     panelHeader (comp76Panel, comp76);
     auto c76Top = comp76Panel.removeFromTop (105);
-    layoutKnob (comp76Input, nextRowLeft (c76Top));
-    layoutKnob (comp76Output, nextRowLeft (c76Top));
+    layoutKnobLocal (comp76Input, nextRowLeft (c76Top));
+    layoutKnobLocal (comp76Output, nextRowLeft (c76Top));
     auto c76Mid = comp76Panel.removeFromTop (105);
-    layoutKnob (comp76Attack, nextRowLeft (c76Mid));
-    layoutKnob (comp76Release, nextRowLeft (c76Mid));
+    layoutKnobLocal (comp76Attack, nextRowLeft (c76Mid));
+    layoutKnobLocal (comp76Release, nextRowLeft (c76Mid));
     comp76BypassButton.setBounds (comp76Panel.removeFromTop (28)); comp76Panel.removeFromTop (8);
     auto ratioArea = comp76Panel.removeFromTop (30);
     for (auto& b : comp76RatioButtons) { b.setBounds (ratioArea.removeFromLeft (40)); ratioArea.removeFromLeft (4); }
@@ -392,11 +391,11 @@ void D7SChannelStripFullAudioProcessorEditor::resized()
 
     panelHeader (comp2aPanel, comp2a);
     auto c2aTop = comp2aPanel.removeFromTop (105);
-    layoutKnob (comp2aPeak, nextRowLeft (c2aTop));
-    layoutKnob (comp2aGain, nextRowLeft (c2aTop));
+    layoutKnobLocal (comp2aPeak, nextRowLeft (c2aTop));
+    layoutKnobLocal (comp2aGain, nextRowLeft (c2aTop));
     auto c2aMid = comp2aPanel.removeFromTop (105);
-    layoutKnob (comp2aEmphasis, nextRowLeft (c2aMid));
-    layoutKnob (comp2aMix, nextRowLeft (c2aMid));
+    layoutKnobLocal (comp2aEmphasis, nextRowLeft (c2aMid));
+    layoutKnobLocal (comp2aMix, nextRowLeft (c2aMid));
     comp2aBypassButton.setBounds (comp2aPanel.removeFromTop (28)); comp2aPanel.removeFromTop (8);
     auto mode2a = comp2aPanel.removeFromTop (30); for (auto& b : comp2aModeButtons) { b.setBounds (mode2a.removeFromLeft (78)); mode2a.removeFromLeft (6); }
     comp2aPanel.removeFromTop (8);
@@ -405,19 +404,19 @@ void D7SChannelStripFullAudioProcessorEditor::resized()
 
     panelHeader (tubePanel, tube);
     auto tubeTop = tubePanel.removeFromTop (105);
-    layoutKnob (tubeBeauty, nextRowLeft (tubeTop));
-    layoutKnob (tubeBeast, nextRowLeft (tubeTop));
+    layoutKnobLocal (tubeBeauty, nextRowLeft (tubeTop));
+    layoutKnobLocal (tubeBeast, nextRowLeft (tubeTop));
     auto tubeMid = tubePanel.removeFromTop (105);
-    layoutKnob (tubeSensitivity, nextRowLeft (tubeMid));
-    layoutKnob (tubeMix, nextRowLeft (tubeMid));
+    layoutKnobLocal (tubeSensitivity, nextRowLeft (tubeMid));
+    layoutKnobLocal (tubeMix, nextRowLeft (tubeMid));
     tubeBypassButton.setBounds (tubePanel.removeFromTop (28));
 
     panelHeader (esserPanel, esser);
     auto esTop = esserPanel.removeFromTop (105);
-    layoutKnob (esserThreshold, nextRowLeft (esTop));
-    layoutKnob (esserFreq, nextRowLeft (esTop));
+    layoutKnobLocal (esserThreshold, nextRowLeft (esTop));
+    layoutKnobLocal (esserFreq, nextRowLeft (esTop));
     auto esMid = esserPanel.removeFromTop (105);
-    layoutKnob (esserRange, nextRowLeft (esMid));
+    layoutKnobLocal (esserRange, nextRowLeft (esMid));
     esserBypassButton.setBounds (esMid.removeFromLeft (120).withHeight (28));
     auto modeEsser = esserPanel.removeFromTop (30); for (auto& b : esserModeButtons) { b.setBounds (modeEsser.removeFromLeft (82)); modeEsser.removeFromLeft (6); }
     esserPanel.removeFromTop (8);
