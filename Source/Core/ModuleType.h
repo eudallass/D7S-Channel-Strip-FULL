@@ -7,5 +7,6 @@ enum class ModuleType
     Comp76,
     Comp2A,
     Tube,
-    Esser
+    Esser,
+    Delay
 };
