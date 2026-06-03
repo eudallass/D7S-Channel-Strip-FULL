@@ -8,7 +8,18 @@
 class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
 {
 public:
-    static constexpr int numSpectrumBins = 16;
+    static constexpr int numSpectrumBins = 48;
+    static constexpr int numRackModules = 6;
+
+    enum ModuleIndex
+    {
+        moduleNoiseGT1 = 0,
+        moduleEQ4K     = 1,
+        module76       = 2,
+        module2A       = 3,
+        moduleTube     = 4,
+        moduleEsser    = 5
+    };
 
     D7SChannelStripFullAudioProcessor();
     ~D7SChannelStripFullAudioProcessor() override;
@@ -46,6 +57,9 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
 
+    void setModuleOrder (const std::array<int, numRackModules>& newOrder) noexcept;
+    std::array<int, numRackModules> getModuleOrder() const noexcept;
+
     float getRackInputPeakDb() const noexcept  { return rackInputPeakDb.load(); }
     float getRackOutputPeakDb() const noexcept { return rackOutputPeakDb.load(); }
     float getNoiseGT1GainReductionDb() const noexcept { return noiseGT1.getGainReductionDb(); }
@@ -67,6 +81,8 @@ private:
     NoiseGT1Processor noiseGT1;
 
     double currentSampleRate { 44100.0 };
+
+    std::array<std::atomic<int>, numRackModules> rackModuleOrder {};
 
     std::array<double, 8> eqHpfState {};
     std::array<double, 8> eqLpfState {};
