@@ -5,6 +5,7 @@
 #include <array>
 #include <atomic>
 #include "Modules/NoiseGT1Processor.h"
+#include "Modules/DelayGlideProcessor.h"
 
 class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
 {
@@ -84,6 +85,7 @@ private:
     juce::AudioProcessorValueTreeState apvts;
 
     NoiseGT1Processor noiseGT1;
+    DelayGlideProcessor delayGlide;
 
     double currentSampleRate { 44100.0 };
 
