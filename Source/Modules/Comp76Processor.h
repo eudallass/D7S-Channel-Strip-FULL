@@ -26,6 +26,7 @@ private:
 
     static double smoothCoeffMs (double timeMs, double sampleRate) noexcept;
     static double peakDbFromLinear (double value) noexcept;
+    double dynamicReleaseCoeff (int channel, double baseReleaseMs, double currentGrDb) noexcept;
 
     std::atomic<float>* inputParam { nullptr };
     std::atomic<float>* outputParam { nullptr };
@@ -39,6 +40,8 @@ private:
     int lookaheadSamples { 0 };
     int oversampleLatency { 0 };
     std::array<double, 8> env {};
+    std::array<double, 8> longTermGrAvg {};
+    double longTermCoef { 0.0 };
 
     juce::SmoothedValue<float> inputSmooth;
     juce::SmoothedValue<float> outputSmooth;
