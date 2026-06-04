@@ -6,6 +6,17 @@ namespace
     {
         return p != nullptr ? p->load() : fallback;
     }
+
+    static double scHpfFrequencyFromIndex (int idx) noexcept
+    {
+        switch (idx)
+        {
+            case 1: return 60.0;
+            case 2: return 90.0;
+            case 3: return 150.0;
+            default: return 0.0;
+        }
+    }
 }
 
 void Comp76Processor::cacheParameters (juce::AudioProcessorValueTreeState& apvts)
@@ -15,6 +26,7 @@ void Comp76Processor::cacheParameters (juce::AudioProcessorValueTreeState& apvts
     attackParam  = apvts.getRawParameterValue ("comp76_attack");
     releaseParam = apvts.getRawParameterValue ("comp76_release");
     ratioParam   = apvts.getRawParameterValue ("comp76_ratio");
+    scHpfParam   = apvts.getRawParameterValue ("comp76_sc_hpf");
     bypassParam  = apvts.getRawParameterValue ("comp76_bypass");
 }
 
@@ -35,6 +47,8 @@ void Comp76Processor::reset()
 {
     env.fill (-120.0);
     longTermGrAvg.fill (0.0);
+    scHpfX1.fill (0.0);
+    scHpfY1.fill (0.0);
     allButtonsPhaseA = 0.0;
     allButtonsPhaseB = 0.37;
     inputSmooth.setCurrentAndTargetValue (readParam (inputParam, 4.0f));
@@ -58,6 +72,22 @@ double Comp76Processor::smoothCoeffMs (double timeMs, double sampleRate) noexcep
 double Comp76Processor::peakDbFromLinear (double value) noexcept
 {
     return juce::Decibels::gainToDecibels (juce::jmax (value, 1.0e-9));
+}
+
+double Comp76Processor::processSidechainHPF (int channel, double x) noexcept
+{
+    const double freq = scHpfFrequencyFromIndex (scHpfIndex);
+    if (freq <= 0.0)
+        return x;
+
+    const auto idx = static_cast<size_t> (juce::jlimit (0, 7, channel));
+    const double rc = 1.0 / (juce::MathConstants<double>::twoPi * freq);
+    const double dt = 1.0 / juce::jmax (sr, 1.0);
+    const double alpha = rc / (rc + dt);
+    const double y = alpha * (scHpfY1[idx] + x - scHpfX1[idx]);
+    scHpfX1[idx] = x;
+    scHpfY1[idx] = y;
+    return y;
 }
 
 double Comp76Processor::dynamicReleaseCoeff (int channel, double baseReleaseMs, double currentGrDb) noexcept
@@ -114,6 +144,7 @@ void Comp76Processor::processInternal (juce::AudioBuffer<FloatType>& buffer)
     outputSmooth.setTargetValue (readParam (outputParam, 5.0f));
     attackSmooth.setTargetValue (readParam (attackParam, 3.0f));
     releaseSmooth.setTargetValue (readParam (releaseParam, 5.0f));
+    scHpfIndex = (int) std::round (readParam (scHpfParam, 0.0f));
     setBypass (readParam (bypassParam, 1.0f) > 0.5f);
 
     const int ratioIndex = (int) std::round (readParam (ratioParam, 0.0f));
@@ -135,7 +166,8 @@ void Comp76Processor::processInternal (juce::AudioBuffer<FloatType>& buffer)
             auto* data = buffer.getWritePointer (ch);
             const double dry = (double) data[i];
             double x = dry * inputGain;
-            const double detDb = peakDbFromLinear (std::abs (x));
+            const double detectorSample = processSidechainHPF (ch, x);
+            const double detDb = peakDbFromLinear (std::abs (detectorSample));
             const double over = env[(size_t) ch] - (-24.0);
             const double predictedGrDb = allButtons ? computeAllButtonsGainReductionDb (env[(size_t) ch])
                                                      : (over > 0.0 ? over * (1.0 - (1.0 / ratio)) : 0.0);
