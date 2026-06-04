@@ -27,6 +27,8 @@ private:
     static double smoothCoeffMs (double timeMs, double sampleRate) noexcept;
     static double peakDbFromLinear (double value) noexcept;
     double dynamicReleaseCoeff (int channel, double baseReleaseMs, double currentGrDb) noexcept;
+    double getAllButtonsBiasDrift() noexcept;
+    double computeAllButtonsGainReductionDb (double envDb) noexcept;
 
     std::atomic<float>* inputParam { nullptr };
     std::atomic<float>* outputParam { nullptr };
@@ -42,6 +44,8 @@ private:
     std::array<double, 8> env {};
     std::array<double, 8> longTermGrAvg {};
     double longTermCoef { 0.0 };
+    double allButtonsPhaseA { 0.0 };
+    double allButtonsPhaseB { 0.37 };
 
     juce::SmoothedValue<float> inputSmooth;
     juce::SmoothedValue<float> outputSmooth;
