@@ -30,6 +30,7 @@ void Comp2AProcessor::prepare (double sampleRate, int, int numChannels)
 void Comp2AProcessor::reset()
 {
     env.fill (0.0);
+    cellMemory.fill (0.0);
     peakSmooth.setCurrentAndTargetValue (readParam (peakParam, 0.0f));
     gainSmooth.setCurrentAndTargetValue (readParam (gainParam, 40.0f));
     emphasisSmooth.setCurrentAndTargetValue (readParam (emphasisParam, 0.0f));
@@ -51,6 +52,21 @@ double Comp2AProcessor::smoothCoeffMs (double timeMs, double sampleRate) noexcep
 double Comp2AProcessor::peakDbFromLinear (double value) noexcept
 {
     return juce::Decibels::gainToDecibels (juce::jmax (value, 1.0e-9));
+}
+
+double Comp2AProcessor::t4OptoResponseDb (int channel, double controlVoltageDb) noexcept
+{
+    const auto idx = static_cast<size_t> (juce::jlimit (0, 7, channel));
+    const double lightIntensity = std::pow (10.0, juce::jlimit (-80.0, 36.0, controlVoltageDb) / 20.0);
+    const double squared = lightIntensity * lightIntensity;
+    const double dynamicTau = 0.060 + cellMemory[idx] * 5.0;
+    const double coef = 1.0 - std::exp (-1.0 / (juce::jmax (dynamicTau, 0.001) * juce::jmax (sr, 1.0)));
+    cellMemory[idx] += coef * (squared - cellMemory[idx]);
+    cellMemory[idx] = juce::jlimit (0.0, 32.0, cellMemory[idx]);
+
+    const double resistance = 1.0 / (0.1 + cellMemory[idx] * 4.0);
+    const double grDb = -juce::Decibels::gainToDecibels (juce::jlimit (0.001, 10.0, resistance));
+    return juce::jlimit (0.0, 36.0, grDb);
 }
 
 template <typename FloatType>
@@ -76,21 +92,20 @@ void Comp2AProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
         const double localMix = mixSmooth.getNextValue() / 100.0;
         const double wetMix = bypassWet.getNextValue();
         const double attack = smoothCoeffMs (8.0, sr);
-        const double baseReleaseMs = 420.0 + peak * 380.0;
         const double threshold = -8.0 - peak * 36.0;
-        const double slope = limitMode ? 0.78 : 0.52;
+        const double slope = limitMode ? 0.95 : 0.68;
 
         for (int ch = 0; ch < numCh; ++ch)
         {
             auto* data = buffer.getWritePointer (ch);
             const double dry = (double) data[i];
             const double detDb = peakDbFromLinear (std::abs (dry) * (1.0 + emphasis * 1.5));
-            const double target = detDb > threshold ? (detDb - threshold) * slope : 0.0;
-            const double programRelease = baseReleaseMs + juce::jlimit (0.0, 800.0, env[(size_t) ch] * 38.0);
-            const double release = smoothCoeffMs (programRelease, sr);
-            const double coeff = target > env[(size_t) ch] ? attack : release;
-            env[(size_t) ch] += coeff * (target - env[(size_t) ch]);
+            const double controlVoltageDb = detDb > threshold ? (detDb - threshold) * slope : -80.0;
+            const double targetGr = t4OptoResponseDb (ch, controlVoltageDb);
+            const double coeff = targetGr > env[(size_t) ch] ? attack : 1.0;
+            env[(size_t) ch] += coeff * (targetGr - env[(size_t) ch]);
             maxGr = juce::jmax (maxGr, env[(size_t) ch]);
+
             double wet = dry * juce::Decibels::decibelsToGain (-env[(size_t) ch]);
             const double drive = 1.05 + peak * 0.55 + emphasis * 0.12;
             wet = (std::tanh (wet * drive + 0.025) - std::tanh (0.025)) / std::tanh (drive);
