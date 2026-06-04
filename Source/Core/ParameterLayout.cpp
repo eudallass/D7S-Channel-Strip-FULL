@@ -34,6 +34,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp76_attack", 1 }, "76 Attack", juce::NormalisableRange<float> (1.0f, 7.0f), 3.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp76_release", 1 }, "76 Release", juce::NormalisableRange<float> (1.0f, 7.0f), 5.0f));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "comp76_ratio", 1 }, "76 Ratio", juce::StringArray { "4", "8", "12", "20", "All" }, 0));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "comp76_sc_hpf", 1 }, "76 SC HPF", juce::StringArray { "Off", "60", "90", "150" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "comp76_bypass", 1 }, "76 Bypass", true));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp2a_peak", 1 }, "2A Peak Reduction", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
@@ -41,6 +42,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "comp2a_mode", 1 }, "2A Mode", juce::StringArray { "Compress", "Limit" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp2a_emphasis", 1 }, "2A HF Emphasis", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp2a_mix", 1 }, "2A Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 100.0f));
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "comp2a_sc_hpf", 1 }, "2A SC HPF", juce::StringArray { "Off", "60", "90", "150" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "comp2a_bypass", 1 }, "2A Bypass", true));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_beauty", 1 }, "Tube Beauty", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
