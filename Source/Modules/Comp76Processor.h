@@ -29,12 +29,14 @@ private:
     double dynamicReleaseCoeff (int channel, double baseReleaseMs, double currentGrDb) noexcept;
     double getAllButtonsBiasDrift() noexcept;
     double computeAllButtonsGainReductionDb (double envDb) noexcept;
+    double processSidechainHPF (int channel, double x) noexcept;
 
     std::atomic<float>* inputParam { nullptr };
     std::atomic<float>* outputParam { nullptr };
     std::atomic<float>* attackParam { nullptr };
     std::atomic<float>* releaseParam { nullptr };
     std::atomic<float>* ratioParam { nullptr };
+    std::atomic<float>* scHpfParam { nullptr };
     std::atomic<float>* bypassParam { nullptr };
 
     double sr { 44100.0 };
@@ -43,6 +45,9 @@ private:
     int oversampleLatency { 0 };
     std::array<double, 8> env {};
     std::array<double, 8> longTermGrAvg {};
+    std::array<double, 8> scHpfX1 {};
+    std::array<double, 8> scHpfY1 {};
+    int scHpfIndex { 0 };
     double longTermCoef { 0.0 };
     double allButtonsPhaseA { 0.0 };
     double allButtonsPhaseB { 0.37 };
