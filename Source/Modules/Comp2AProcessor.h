@@ -25,18 +25,23 @@ private:
     static double smoothCoeffMs (double timeMs, double sampleRate) noexcept;
     static double peakDbFromLinear (double value) noexcept;
     double t4OptoResponseDb (int channel, double controlVoltageDb) noexcept;
+    double processSidechainHPF (int channel, double x) noexcept;
 
     std::atomic<float>* peakParam { nullptr };
     std::atomic<float>* gainParam { nullptr };
     std::atomic<float>* modeParam { nullptr };
     std::atomic<float>* emphasisParam { nullptr };
     std::atomic<float>* mixParam { nullptr };
+    std::atomic<float>* scHpfParam { nullptr };
     std::atomic<float>* bypassParam { nullptr };
 
     double sr { 44100.0 };
     int channels { 2 };
     std::array<double, 8> env {};
     std::array<double, 8> cellMemory {};
+    std::array<double, 8> scHpfX1 {};
+    std::array<double, 8> scHpfY1 {};
+    int scHpfIndex { 0 };
 
     juce::SmoothedValue<float> peakSmooth;
     juce::SmoothedValue<float> gainSmooth;
