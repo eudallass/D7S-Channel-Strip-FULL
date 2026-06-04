@@ -24,6 +24,7 @@ private:
     void processInternal (juce::AudioBuffer<FloatType>& buffer);
     static double smoothCoeffMs (double timeMs, double sampleRate) noexcept;
     static double peakDbFromLinear (double value) noexcept;
+    double t4OptoResponseDb (int channel, double controlVoltageDb) noexcept;
 
     std::atomic<float>* peakParam { nullptr };
     std::atomic<float>* gainParam { nullptr };
@@ -35,6 +36,7 @@ private:
     double sr { 44100.0 };
     int channels { 2 };
     std::array<double, 8> env {};
+    std::array<double, 8> cellMemory {};
 
     juce::SmoothedValue<float> peakSmooth;
     juce::SmoothedValue<float> gainSmooth;
