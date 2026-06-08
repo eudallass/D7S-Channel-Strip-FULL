@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <vector>
 #include "../PluginProcessor.h"
 
 class SpectrumDisplay final : public juce::Component,
@@ -52,6 +53,8 @@ private:
     float minRelativeDb() const noexcept;
     float displayDbForBin (float dbFs, float freqHz) const noexcept;
 
+    std::vector<juce::Point<float>> collectSpectrumPoints (bool post, juce::Rectangle<float> plot) const;
+    juce::Path buildSmoothedPath (const std::vector<juce::Point<float>>& points, bool closeToBottom, juce::Rectangle<float> plot) const;
     juce::Path buildSpectrumPath (bool post, juce::Rectangle<float> plot, bool closeToBottom) const;
     void drawGrid (juce::Graphics& g, juce::Rectangle<float> plot);
     void drawCurve (juce::Graphics& g, bool post, juce::Colour colour, float alpha, juce::Rectangle<float> plot);
