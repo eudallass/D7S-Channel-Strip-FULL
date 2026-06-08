@@ -24,6 +24,7 @@ private:
     void processInternal (juce::AudioBuffer<FloatType>& buffer);
     static double smoothCoeffMs (double timeMs, double sampleRate) noexcept;
     static double peakDbFromLinear (double value) noexcept;
+    static double tubeGainStage (double x, double drive) noexcept;
     double t4OptoResponseDb (int channel, double controlVoltageDb) noexcept;
     double processSidechainHPF (int channel, double x) noexcept;
 
