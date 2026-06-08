@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
+#include <array>
 #include <atomic>
 #include "../Core/IModule.h"
 
@@ -21,7 +22,8 @@ private:
     template <typename FloatType>
     void processInternal (juce::AudioBuffer<FloatType>& buffer);
 
-    static double softClip (double x, double shape) noexcept;
+    static double hybridClip (double x, double shape, double bias) noexcept;
+    double processDcBlocker (int channel, double x) noexcept;
 
     std::atomic<float>* driveParam { nullptr };
     std::atomic<float>* ceilingParam { nullptr };
@@ -31,6 +33,10 @@ private:
 
     double sr { 44100.0 };
     int channels { 2 };
+    double dcCoef { 0.0 };
+    double biasPhase { 0.0 };
+    std::array<double, 8> dcX1 {};
+    std::array<double, 8> dcY1 {};
 
     juce::SmoothedValue<float> driveSmooth;
     juce::SmoothedValue<float> ceilingSmooth;
