@@ -36,6 +36,7 @@ target_sources(D7SChannelStripFull
         Source/Modules/Comp76Processor.cpp
         Source/Modules/Comp2AProcessor.cpp
         Source/Modules/TubeProcessor.cpp
+        Source/Modules/ClipperProcessor.cpp
         Source/Modules/EsserProcessor.cpp
         Source/Modules/DelayGlideProcessor.cpp
 )
