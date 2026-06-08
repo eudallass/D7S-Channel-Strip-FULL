@@ -21,15 +21,56 @@ private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
+    class D7SScrollBarLookAndFeel final : public juce::LookAndFeel_V4
+    {
+    public:
+        void drawScrollbar (juce::Graphics& g,
+                            juce::ScrollBar& scrollbar,
+                            int x, int y, int width, int height,
+                            bool isScrollbarVertical,
+                            int thumbStartPosition,
+                            int thumbSize,
+                            bool isMouseOver,
+                            bool isMouseDown) override
+        {
+            juce::ignoreUnused (scrollbar);
+
+            auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height);
+            g.setColour (juce::Colour (12, 14, 18).withAlpha (0.92f));
+            g.fillRoundedRectangle (bounds.reduced (1.0f), 5.0f);
+
+            juce::Rectangle<float> thumb;
+            if (isScrollbarVertical)
+                thumb = { (float) x + 2.0f, (float) thumbStartPosition + 2.0f, (float) width - 4.0f, (float) thumbSize - 4.0f };
+            else
+                thumb = { (float) thumbStartPosition + 2.0f, (float) y + 2.0f, (float) thumbSize - 4.0f, (float) height - 4.0f };
+
+            const auto base = isMouseDown ? juce::Colour (255, 200, 88)
+                            : isMouseOver ? juce::Colour (255, 180, 60)
+                                          : juce::Colour (150, 126, 82);
+
+            g.setColour (base.withAlpha (isMouseDown ? 0.95f : 0.72f));
+            g.fillRoundedRectangle (thumb, 4.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.10f));
+            g.drawRoundedRectangle (thumb, 4.0f, 1.0f);
+        }
+    };
+
     class RackViewport final : public juce::Viewport
     {
     public:
         RackViewport()
         {
+            setLookAndFeel (&scrollbarLookAndFeel);
             setScrollBarsShown (false, true);
             setScrollBarThickness (12);
             setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::nonHover);
             setSingleStepSizes (40, 40);
+        }
+
+        ~RackViewport() override
+        {
+            setLookAndFeel (nullptr);
         }
 
         void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
@@ -79,6 +120,9 @@ private:
             if (canLeft) drawArrow (true);
             if (canRight) drawArrow (false);
         }
+
+    private:
+        D7SScrollBarLookAndFeel scrollbarLookAndFeel;
     };
 
     struct ParamSlider
