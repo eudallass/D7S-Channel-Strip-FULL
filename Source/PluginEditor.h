@@ -21,6 +21,31 @@ private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
+    class RackViewport final : public juce::Viewport
+    {
+    public:
+        RackViewport()
+        {
+            setScrollBarsShown (false, true);
+            setScrollBarThickness (12);
+            setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::nonHover);
+            setSingleStepSizes (40, 40);
+        }
+
+        void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
+        {
+            if (e.mods.isShiftDown() && wheel.deltaY != 0.0f)
+            {
+                auto horizontal = wheel;
+                horizontal.deltaX = wheel.deltaY;
+                horizontal.deltaY = 0.0f;
+                juce::Viewport::mouseWheelMove (e, horizontal);
+                return;
+            }
+            juce::Viewport::mouseWheelMove (e, wheel);
+        }
+    };
+
     struct ParamSlider
     {
         juce::Label label;
@@ -76,6 +101,7 @@ private:
     D7SChannelStripFullAudioProcessor& audioProcessor;
 
     float uiScale { 0.75f };
+    RackViewport rackViewport;
     juce::Component content;
     juce::TextButton scale100Button { "100%" };
     juce::TextButton scale75Button  { "75%" };
