@@ -11,6 +11,7 @@
 #include "Modules/Comp76Processor.h"
 #include "Modules/Comp2AProcessor.h"
 #include "Modules/TubeProcessor.h"
+#include "Modules/ClipperProcessor.h"
 #include "Modules/EsserProcessor.h"
 #include "Modules/DelayGlideProcessor.h"
 
@@ -20,7 +21,7 @@ public:
     static constexpr int spectrumOrder = 11;
     static constexpr int spectrumFFTSize = 1 << spectrumOrder;
     static constexpr int numSpectrumBins = 96;
-    static constexpr int numRackModules = 7;
+    static constexpr int numRackModules = 8;
 
     enum ModuleIndex
     {
@@ -29,8 +30,9 @@ public:
         module76       = 2,
         module2A       = 3,
         moduleTube     = 4,
-        moduleEsser    = 5,
-        moduleDelay    = 6
+        moduleClipper  = 5,
+        moduleEsser    = 6,
+        moduleDelay    = 7
     };
 
     D7SChannelStripFullAudioProcessor();
@@ -102,6 +104,7 @@ private:
     Comp76Processor comp76;
     Comp2AProcessor comp2a;
     TubeProcessor tube;
+    ClipperProcessor clipper;
     EsserProcessor esser;
     DelayGlideProcessor delayGlide;
 
