@@ -75,5 +75,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "analyzer_freeze", 1 }, "Analyzer Freeze", false));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "analyzer_auto_range", 1 }, "Analyzer Auto Range", false));
 
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "editor_width", 1 }, "Editor Width", juce::NormalisableRange<float> (800.0f, 2800.0f, 1.0f), 1400.0f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "editor_height", 1 }, "Editor Height", juce::NormalisableRange<float> (520.0f, 900.0f, 1.0f), 720.0f));
+
     return { params.begin(), params.end() };
 }
