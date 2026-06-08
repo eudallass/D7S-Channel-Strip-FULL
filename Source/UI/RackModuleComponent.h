@@ -29,31 +29,44 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        auto area = getLocalBounds().toFloat();
+        auto area = getLocalBounds().toFloat().reduced (1.0f);
+        juce::DropShadow (juce::Colours::black.withAlpha (0.35f), 8, { 0, 2 }).drawForRectangle (g, area.toNearestInt());
 
-        g.setColour (juce::Colour (45, 45, 45));
-        g.fillRoundedRectangle (area.reduced (1.0f), 8.0f);
+        juce::ColourGradient panelGrad (juce::Colour (48, 50, 55), area.getX(), area.getY(),
+                                        juce::Colour (25, 27, 31), area.getX(), area.getBottom(), false);
+        g.setGradientFill (panelGrad);
+        g.fillRoundedRectangle (area, 8.0f);
 
-        g.setColour (enabled ? juce::Colours::silver : juce::Colours::darkred);
-        g.drawRoundedRectangle (area.reduced (1.0f), 8.0f, 2.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.05f));
+        g.fillRoundedRectangle (area.removeFromTop (area.getHeight() * 0.42f), 8.0f);
+
+        const auto outline = getLocalBounds().toFloat().reduced (1.0f);
+        g.setColour (enabled ? juce::Colour (255, 180, 60).withAlpha (0.72f)
+                             : juce::Colour (140, 54, 54).withAlpha (0.80f));
+        g.drawRoundedRectangle (outline, 8.0f, enabled ? 1.6f : 1.2f);
 
         g.setColour (enabled ? juce::Colours::white : juce::Colours::grey);
-        g.setFont (19.0f);
-        g.drawText (name, getLocalBounds().reduced (16, 0), juce::Justification::centredLeft);
+        g.setFont (juce::FontOptions (19.0f, juce::Font::bold));
+        g.drawText (name, getLocalBounds().reduced (18, 0), juce::Justification::centredLeft);
 
-        auto buttonArea = getBypassButtonArea();
-
-        g.setColour (enabled ? juce::Colour (25, 90, 45) : juce::Colours::darkred);
-        g.fillRoundedRectangle (buttonArea.toFloat(), 6.0f);
+        auto buttonArea = getBypassButtonArea().toFloat();
+        const auto buttonColour = enabled ? juce::Colour (30, 105, 54) : juce::Colour (105, 32, 32);
+        g.setColour (buttonColour);
+        g.fillRoundedRectangle (buttonArea, 6.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.16f));
+        g.drawRoundedRectangle (buttonArea, 6.0f, 1.0f);
 
         g.setColour (juce::Colours::white);
-        g.setFont (13.0f);
-        g.drawText (enabled ? "ACTIVE" : "BYPASS", buttonArea, juce::Justification::centred);
+        g.setFont (juce::FontOptions (12.5f, juce::Font::bold));
+        g.drawText (enabled ? "ACTIVE" : "BYPASS", buttonArea.toNearestInt(), juce::Justification::centred);
 
-        auto grip = getLocalBounds().removeFromLeft (10).reduced (3, 15);
-        g.setColour (juce::Colours::white.withAlpha (0.28f));
+        auto grip = getLocalBounds().removeFromLeft (12).reduced (4, 14);
+        g.setColour (juce::Colours::white.withAlpha (0.34f));
         for (int y = grip.getY(); y < grip.getBottom(); y += 6)
+        {
             g.fillEllipse ((float) grip.getX(), (float) y, 3.0f, 3.0f);
+            g.fillEllipse ((float) grip.getX() + 5.0f, (float) y, 3.0f, 3.0f);
+        }
     }
 
     void mouseDown (const juce::MouseEvent& event) override
