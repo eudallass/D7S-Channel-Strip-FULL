@@ -68,6 +68,14 @@ double Comp2AProcessor::peakDbFromLinear (double value) noexcept
     return juce::Decibels::gainToDecibels (juce::jmax (value, 1.0e-9));
 }
 
+double Comp2AProcessor::tubeGainStage (double x, double drive) noexcept
+{
+    const double bias = 0.018;
+    const double biased = x * (1.0 + drive * 0.30) + bias;
+    const double shaped = biased / (1.0 + std::abs (biased) * 0.32);
+    return (shaped - bias) * (1.0 + drive * 0.08);
+}
+
 double Comp2AProcessor::processSidechainHPF (int channel, double x) noexcept
 {
     const double freq = scHpfFrequencyFromIndex (scHpfIndex);
@@ -139,8 +147,8 @@ void Comp2AProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
             maxGr = juce::jmax (maxGr, env[(size_t) ch]);
 
             double wet = dry * juce::Decibels::decibelsToGain (-env[(size_t) ch]);
-            const double drive = 1.05 + peak * 0.55 + emphasis * 0.12;
-            wet = (std::tanh (wet * drive + 0.025) - std::tanh (0.025)) / std::tanh (drive);
+            const double drive = 0.30 + peak * 0.35 + emphasis * 0.10;
+            wet = tubeGainStage (wet, drive);
             wet *= makeUp;
             const double compressed = dry * (1.0 - localMix) + wet * localMix;
             data[i] = (FloatType) (dry * (1.0 - wetMix) + compressed * wetMix);
