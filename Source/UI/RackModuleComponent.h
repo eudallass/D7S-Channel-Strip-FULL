@@ -50,7 +50,6 @@ public:
         g.setFont (13.0f);
         g.drawText (enabled ? "ACTIVE" : "BYPASS", buttonArea, juce::Justification::centred);
 
-        // Small visual grip: this header is draggable for rack order.
         auto grip = getLocalBounds().removeFromLeft (10).reduced (3, 15);
         g.setColour (juce::Colours::white.withAlpha (0.28f));
         for (int y = grip.getY(); y < grip.getBottom(); y += 6)
@@ -70,6 +69,7 @@ public:
             return;
         }
 
+        beginDragAutoRepeat (50);
         draggingHeader = true;
         if (onDragStart)
             onDragStart (this, event);
@@ -77,7 +77,16 @@ public:
 
     void mouseDrag (const juce::MouseEvent& event) override
     {
-        if (draggingHeader && onDragMove)
+        if (! draggingHeader)
+            return;
+
+        if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
+        {
+            const auto pos = viewport->getLocalPoint (this, event.getPosition());
+            viewport->autoScroll (pos.x, pos.y, 50, 8);
+        }
+
+        if (onDragMove)
             onDragMove (this, event);
     }
 
