@@ -6,6 +6,17 @@ namespace
     {
         return p != nullptr ? p->load() : fallback;
     }
+
+    static double scHpfFrequencyFromIndex (int idx) noexcept
+    {
+        switch (idx)
+        {
+            case 1: return 60.0;
+            case 2: return 90.0;
+            case 3: return 150.0;
+            default: return 0.0;
+        }
+    }
 }
 
 void Comp2AProcessor::cacheParameters (juce::AudioProcessorValueTreeState& apvts)
@@ -15,6 +26,7 @@ void Comp2AProcessor::cacheParameters (juce::AudioProcessorValueTreeState& apvts
     modeParam     = apvts.getRawParameterValue ("comp2a_mode");
     emphasisParam = apvts.getRawParameterValue ("comp2a_emphasis");
     mixParam      = apvts.getRawParameterValue ("comp2a_mix");
+    scHpfParam    = apvts.getRawParameterValue ("comp2a_sc_hpf");
     bypassParam   = apvts.getRawParameterValue ("comp2a_bypass");
 }
 
@@ -31,6 +43,8 @@ void Comp2AProcessor::reset()
 {
     env.fill (0.0);
     cellMemory.fill (0.0);
+    scHpfX1.fill (0.0);
+    scHpfY1.fill (0.0);
     peakSmooth.setCurrentAndTargetValue (readParam (peakParam, 0.0f));
     gainSmooth.setCurrentAndTargetValue (readParam (gainParam, 40.0f));
     emphasisSmooth.setCurrentAndTargetValue (readParam (emphasisParam, 0.0f));
@@ -52,6 +66,22 @@ double Comp2AProcessor::smoothCoeffMs (double timeMs, double sampleRate) noexcep
 double Comp2AProcessor::peakDbFromLinear (double value) noexcept
 {
     return juce::Decibels::gainToDecibels (juce::jmax (value, 1.0e-9));
+}
+
+double Comp2AProcessor::processSidechainHPF (int channel, double x) noexcept
+{
+    const double freq = scHpfFrequencyFromIndex (scHpfIndex);
+    if (freq <= 0.0)
+        return x;
+
+    const auto idx = static_cast<size_t> (juce::jlimit (0, 7, channel));
+    const double rc = 1.0 / (juce::MathConstants<double>::twoPi * freq);
+    const double dt = 1.0 / juce::jmax (sr, 1.0);
+    const double alpha = rc / (rc + dt);
+    const double y = alpha * (scHpfY1[idx] + x - scHpfX1[idx]);
+    scHpfX1[idx] = x;
+    scHpfY1[idx] = y;
+    return y;
 }
 
 double Comp2AProcessor::t4OptoResponseDb (int channel, double controlVoltageDb) noexcept
@@ -80,6 +110,7 @@ void Comp2AProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
     gainSmooth.setTargetValue (readParam (gainParam, 40.0f));
     emphasisSmooth.setTargetValue (readParam (emphasisParam, 0.0f));
     mixSmooth.setTargetValue (readParam (mixParam, 100.0f));
+    scHpfIndex = (int) std::round (readParam (scHpfParam, 0.0f));
     setBypass (readParam (bypassParam, 1.0f) > 0.5f);
 
     const bool limitMode = ((int) std::round (readParam (modeParam, 0.0f))) == 1;
@@ -99,7 +130,8 @@ void Comp2AProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
         {
             auto* data = buffer.getWritePointer (ch);
             const double dry = (double) data[i];
-            const double detDb = peakDbFromLinear (std::abs (dry) * (1.0 + emphasis * 1.5));
+            const double detectorSample = processSidechainHPF (ch, dry);
+            const double detDb = peakDbFromLinear (std::abs (detectorSample) * (1.0 + emphasis * 1.5));
             const double controlVoltageDb = detDb > threshold ? (detDb - threshold) * slope : -80.0;
             const double targetGr = t4OptoResponseDb (ch, controlVoltageDb);
             const double coeff = targetGr > env[(size_t) ch] ? attack : 1.0;
