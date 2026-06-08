@@ -21,6 +21,8 @@ void TubeProcessor::prepare (double sampleRate, int, int numChannels)
 {
     sr = sampleRate > 0.0 ? sampleRate : 44100.0;
     channels = juce::jlimit (1, 8, numChannels);
+    dcBlockerCoef = 1.0 - std::exp (-juce::MathConstants<double>::twoPi * 5.0 / juce::jmax (sr, 1.0));
+
     for (auto* s : { &beautySmooth, &beastSmooth, &sensitivitySmooth, &mixSmooth, &bypassWet })
         s->reset (sr, 0.015);
     reset();
@@ -30,6 +32,9 @@ void TubeProcessor::reset()
 {
     beautyState.fill (0.0);
     beastState.fill (0.0);
+    dcX1.fill (0.0);
+    dcY1.fill (0.0);
+    biasPhase = 0.0;
     beautySmooth.setCurrentAndTargetValue (readParam (beautyParam, 0.0f));
     beastSmooth.setCurrentAndTargetValue (readParam (beastParam, 0.0f));
     sensitivitySmooth.setCurrentAndTargetValue (readParam (sensitivityParam, 50.0f));
@@ -45,6 +50,31 @@ void TubeProcessor::setBypass (bool shouldBypass)
 double TubeProcessor::onePoleCoeff (double frequency, double sampleRate) noexcept
 {
     return 1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * juce::jlimit (10.0, sampleRate * 0.45, frequency) / juce::jmax (sampleRate, 1.0));
+}
+
+double TubeProcessor::tubeWaveshape (double x, double bias, double drive) noexcept
+{
+    const double biased = x * drive + bias;
+    const double shaped = biased / (1.0 + std::abs (biased) * 0.7);
+    return shaped - bias;
+}
+
+double TubeProcessor::nextBiasDrift() noexcept
+{
+    biasPhase += 0.137 / juce::jmax (sr, 1.0);
+    if (biasPhase >= 1.0)
+        biasPhase -= 1.0;
+
+    return std::sin (biasPhase * juce::MathConstants<double>::twoPi) * 0.05;
+}
+
+double TubeProcessor::processDcBlocker (int channel, double x) noexcept
+{
+    const auto idx = static_cast<size_t> (juce::jlimit (0, 7, channel));
+    const double y = x - dcX1[idx] + (1.0 - dcBlockerCoef) * dcY1[idx];
+    dcX1[idx] = x;
+    dcY1[idx] = y;
+    return y;
 }
 
 template <typename FloatType>
@@ -69,6 +99,7 @@ void TubeProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
         const double sens = juce::Decibels::decibelsToGain (-12.0 + sensitivitySmooth.getNextValue() * 0.24);
         const double localMix = mixSmooth.getNextValue() / 100.0;
         const double wetMix = bypassWet.getNextValue();
+        const double drift = nextBiasDrift();
 
         for (int ch = 0; ch < numCh; ++ch)
         {
@@ -77,9 +108,16 @@ void TubeProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
             const double driven = dry * sens;
             beautyState[(size_t) ch] += beautyCoeff * (driven - beautyState[(size_t) ch]);
             beastState[(size_t) ch] += beastCoeff * (driven - beastState[(size_t) ch]);
-            const double beautyWet = std::tanh ((driven - beautyState[(size_t) ch]) * (1.0 + beauty * 5.0));
-            const double beastWet = std::tanh (beastState[(size_t) ch] * (1.0 + beast * 12.0));
-            double wet = driven + beautyWet * beauty * 0.45 + beastWet * beast * 0.65;
+
+            const double highBand = driven - beautyState[(size_t) ch];
+            const double lowBand = beastState[(size_t) ch];
+            const double beautyBias = 0.035 + drift * 0.035;
+            const double beastBias = -0.055 + drift * 0.055;
+            const double beautyWet = tubeWaveshape (highBand, beautyBias, 1.0 + beauty * 5.5);
+            const double beastWet = tubeWaveshape (lowBand, beastBias, 1.0 + beast * 13.0);
+
+            double wet = driven + beautyWet * beauty * 0.48 + beastWet * beast * 0.70;
+            wet = processDcBlocker (ch, wet);
             wet *= juce::Decibels::decibelsToGain (-(beauty * 1.5 + beast * 3.0));
             const double mixed = dry * (1.0 - localMix) + wet * localMix;
             data[i] = (FloatType) (dry * (1.0 - wetMix) + mixed * wetMix);
