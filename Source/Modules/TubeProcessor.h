@@ -22,6 +22,9 @@ private:
     template <typename FloatType>
     void processInternal (juce::AudioBuffer<FloatType>& buffer);
     static double onePoleCoeff (double frequency, double sampleRate) noexcept;
+    static double tubeWaveshape (double x, double bias, double drive) noexcept;
+    double nextBiasDrift() noexcept;
+    double processDcBlocker (int channel, double x) noexcept;
 
     std::atomic<float>* beautyParam { nullptr };
     std::atomic<float>* beastParam { nullptr };
@@ -32,8 +35,12 @@ private:
     double sr { 44100.0 };
     int channels { 2 };
     int oversampleLatency { 0 };
+    double dcBlockerCoef { 0.0 };
+    double biasPhase { 0.0 };
     std::array<double, 8> beautyState {};
     std::array<double, 8> beastState {};
+    std::array<double, 8> dcX1 {};
+    std::array<double, 8> dcY1 {};
 
     juce::SmoothedValue<float> beautySmooth;
     juce::SmoothedValue<float> beastSmooth;
