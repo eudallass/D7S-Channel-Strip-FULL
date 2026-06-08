@@ -40,9 +40,44 @@ private:
                 horizontal.deltaX = wheel.deltaY;
                 horizontal.deltaY = 0.0f;
                 juce::Viewport::mouseWheelMove (e, horizontal);
+                repaint();
                 return;
             }
             juce::Viewport::mouseWheelMove (e, wheel);
+            repaint();
+        }
+
+        void visibleAreaChanged (const juce::Rectangle<int>&) override
+        {
+            repaint();
+        }
+
+        void paintOverChildren (juce::Graphics& g) override
+        {
+            auto* viewed = getViewedComponent();
+            if (viewed == nullptr)
+                return;
+
+            const auto pos = getViewPosition();
+            const bool canLeft = pos.x > 0;
+            const bool canRight = pos.x + getMaximumVisibleWidth() < viewed->getWidth();
+
+            auto drawArrow = [&] (bool left)
+            {
+                const float x = left ? 8.0f : (float) getWidth() - 8.0f;
+                const float y = (float) getHeight() * 0.50f;
+                juce::Path p;
+                if (left)
+                    p.addTriangle (x + 5.0f, y - 10.0f, x - 5.0f, y, x + 5.0f, y + 10.0f);
+                else
+                    p.addTriangle (x - 5.0f, y - 10.0f, x + 5.0f, y, x - 5.0f, y + 10.0f);
+
+                g.setColour (juce::Colour (255, 180, 60).withAlpha (0.42f));
+                g.fillPath (p);
+            };
+
+            if (canLeft) drawArrow (true);
+            if (canRight) drawArrow (false);
         }
     };
 
