@@ -195,9 +195,11 @@ float SpectrumDisplay::displayDbForBin (float dbFs, float freqHz) const noexcept
     return (dbFs - refDb) + tilt * oct;
 }
 
-juce::Path SpectrumDisplay::buildSpectrumPath (bool post, juce::Rectangle<float> plot, bool closeToBottom) const
+std::vector<juce::Point<float>> SpectrumDisplay::collectSpectrumPoints (bool post, juce::Rectangle<float> plot) const
 {
-    juce::Path path;
+    std::vector<juce::Point<float>> points;
+    points.reserve ((size_t) AnalyzerState::numBins);
+
     for (int i = 0; i < AnalyzerState::numBins; ++i)
     {
         const float hz = binToFrequency (i);
@@ -205,23 +207,55 @@ juce::Path SpectrumDisplay::buildSpectrumPath (bool post, juce::Rectangle<float>
         const float db = displayDbForBin (dbFs, hz);
         const float x = frequencyToX (hz, plot);
         const float y = dbToY (juce::jlimit (minRelativeDb(), maxRelativeDb(), db), plot);
+        points.emplace_back (x, y);
+    }
 
-        if (i == 0)
-            path.startNewSubPath (x, y);
-        else
-            path.lineTo (x, y);
+    return points;
+}
+
+juce::Path SpectrumDisplay::buildSmoothedPath (const std::vector<juce::Point<float>>& points, bool closeToBottom, juce::Rectangle<float> plot) const
+{
+    juce::Path path;
+    if (points.empty())
+        return path;
+
+    path.startNewSubPath (points.front());
+
+    if (points.size() == 1)
+    {
+        if (closeToBottom)
+        {
+            path.lineTo (points.front().x, plot.getBottom());
+            path.closeSubPath();
+        }
+        return path;
+    }
+
+    for (size_t i = 0; i + 1 < points.size(); ++i)
+    {
+        const auto p0 = i == 0 ? points[i] : points[i - 1];
+        const auto p1 = points[i];
+        const auto p2 = points[i + 1];
+        const auto p3 = (i + 2 < points.size()) ? points[i + 2] : points[i + 1];
+
+        const auto c1 = p1 + (p2 - p0) / 6.0f;
+        const auto c2 = p2 - (p3 - p1) / 6.0f;
+        path.cubicTo (c1, c2, p2);
     }
 
     if (closeToBottom)
     {
-        const float lastX = frequencyToX (binToFrequency (AnalyzerState::numBins - 1), plot);
-        const float firstX = frequencyToX (binToFrequency (0), plot);
-        path.lineTo (lastX, plot.getBottom());
-        path.lineTo (firstX, plot.getBottom());
+        path.lineTo (points.back().x, plot.getBottom());
+        path.lineTo (points.front().x, plot.getBottom());
         path.closeSubPath();
     }
 
     return path;
+}
+
+juce::Path SpectrumDisplay::buildSpectrumPath (bool post, juce::Rectangle<float> plot, bool closeToBottom) const
+{
+    return buildSmoothedPath (collectSpectrumPoints (post, plot), closeToBottom, plot);
 }
 
 void SpectrumDisplay::drawGrid (juce::Graphics& g, juce::Rectangle<float> plot)
