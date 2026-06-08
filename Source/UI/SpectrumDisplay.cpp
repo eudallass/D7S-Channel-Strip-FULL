@@ -170,7 +170,7 @@ float SpectrumDisplay::rangeDb() const noexcept
 
 float SpectrumDisplay::maxRelativeDb() const noexcept
 {
-    return rangeDb() == 60.0f ? 9.0f : 12.0f;
+    return rangeDb() * 0.33333334f;
 }
 
 float SpectrumDisplay::minRelativeDb() const noexcept
@@ -235,8 +235,8 @@ void SpectrumDisplay::drawGrid (juce::Graphics& g, juce::Rectangle<float> plot)
         g.drawText (formatFrequency (f).replace (" Hz", ""), (int) x - 20, (int) plot.getBottom() + 2, 42, 14, juce::Justification::centred);
     }
 
-    g.setColour (juce::Colour (255, 180, 60).withAlpha (0.80f));
-    g.drawHorizontalLine ((int) dbToY (0.0f, plot), plot.getX(), plot.getRight());
+    g.setColour (juce::Colour (255, 180, 60));
+    g.drawLine (plot.getX(), dbToY (0.0f, plot), plot.getRight(), dbToY (0.0f, plot), 1.5f);
 
     g.setColour (juce::Colours::white.withAlpha (0.12f));
     const int step = rangeDb() > 100.0f ? 20 : 10;
@@ -255,10 +255,10 @@ void SpectrumDisplay::drawCurve (juce::Graphics& g, bool post, juce::Colour colo
     if (alpha <= 0.01f) return;
     auto fill = buildSpectrumPath (post, plot, true);
     auto line = buildSpectrumPath (post, plot, false);
-    g.setColour (colour.withAlpha (0.20f * alpha));
+    g.setColour (colour.withAlpha (0.235f * alpha));
     g.fillPath (fill);
     g.setColour (colour.withAlpha (0.95f * alpha));
-    g.strokePath (line, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.strokePath (line, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
 void SpectrumDisplay::drawPeakLabels (juce::Graphics& g, juce::Rectangle<float> plot)
