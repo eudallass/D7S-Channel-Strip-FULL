@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - dev/all-module-params
 
 jobs:
   build:
@@ -33,6 +34,8 @@ jobs:
       - name: Ad-hoc codesign VST3
         run: |
           codesign --force --deep --sign - "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
+          echo "✅ Codesign applied"
+          codesign -dv --verbose=4 "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
           codesign --verify --deep --strict --verbose=4 "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
 
       - name: Validate VST3
