@@ -7,6 +7,7 @@ void DelayGlideProcessor::prepare (double sampleRate, int samplesPerBlock, int n
     channels = juce::jlimit (1, maxChannels, numChannels);
     preparedBlockSize = juce::jmax (1, samplesPerBlock);
     maxDelaySamples = (int) std::ceil (maxDelaySeconds * sr) + 32;
+    glideCoef = 1.0f - std::exp (-1.0f / (0.100f * (float) juce::jmax (sr, 1.0)));
 
     juce::dsp::ProcessSpec spec { sr, (juce::uint32) preparedBlockSize, 1 };
     for (auto& channelLines : lines)
@@ -26,6 +27,11 @@ void DelayGlideProcessor::reset()
     for (auto& channelLines : lines)
         for (auto& line : channelLines)
             line.reset();
+
+    for (auto& chState : currentDelaySamples)
+        chState.fill (0.0f);
+    for (auto& chState : targetDelaySamplesState)
+        chState.fill (0.0f);
 
     lineOutputs.fill (0.0f);
     feedbackVector.fill (0.0f);
@@ -91,10 +97,18 @@ float DelayGlideProcessor::getDivisionBeats() const noexcept
     }
 }
 
-float DelayGlideProcessor::readTapeLine (TapeDelayLine& line, float delaySamples) noexcept
+float DelayGlideProcessor::readTapeLine (int ch, int lineIndex, float targetDelaySamples) noexcept
 {
-    delaySamples = juce::jlimit (1.0f, (float) maxDelaySamples - 4.0f, delaySamples);
-    line.setDelay (delaySamples);
+    auto& line = lines[(size_t) ch][(size_t) lineIndex];
+    auto& current = currentDelaySamples[(size_t) ch][(size_t) lineIndex];
+    auto& target = targetDelaySamplesState[(size_t) ch][(size_t) lineIndex];
+
+    target = juce::jlimit (1.0f, (float) maxDelaySamples - 4.0f, targetDelaySamples);
+    if (current <= 0.0f)
+        current = target;
+    current += glideCoef * (target - current);
+
+    line.setDelay (current);
     return line.popSample (0);
 }
 
@@ -164,8 +178,6 @@ void DelayGlideProcessor::process (juce::AudioBuffer<FloatType>& buffer)
 
             for (int line = 0; line < numLines; ++line)
             {
-                auto& dl = lines[(size_t) ch][(size_t) line];
-
                 const float baseSeconds = baseMs[(size_t) line] * 0.001f;
                 const float scaledSeconds = juce::jlimit (0.012f, 2.0f, userDelaySeconds * (0.42f + 0.075f * (float) line) + baseSeconds * 0.35f);
 
@@ -177,7 +189,7 @@ void DelayGlideProcessor::process (juce::AudioBuffer<FloatType>& buffer)
                 const float modulation = 1.0f + lfo * 0.0125f;
                 const float delaySamples = scaledSeconds * (float) sr * modulation / pitchRatio;
 
-                lineOutputs[(size_t) line] = readTapeLine (dl, delaySamples);
+                lineOutputs[(size_t) line] = readTapeLine (ch, line, delaySamples);
                 wetSum += lineOutputs[(size_t) line];
             }
 
