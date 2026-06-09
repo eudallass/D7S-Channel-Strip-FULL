@@ -36,7 +36,8 @@ private:
     int channels { 2 };
     int oversampleLatency { 0 };
     double dcBlockerCoef { 0.0 };
-    double biasPhase { 0.0 };
+    double biasDriftPhase { 0.0 };
+    juce::Random biasJitterRng;
     std::array<double, 8> beautyState {};
     std::array<double, 8> beastState {};
     std::array<double, 8> dcX1 {};
