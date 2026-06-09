@@ -51,7 +51,7 @@ private:
 
     using TapeDelayLine = juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Lagrange3rd>;
 
-    float readTapeLine (TapeDelayLine& line, float delaySamples) noexcept;
+    float readTapeLine (int ch, int line, float targetDelaySamples) noexcept;
     void writeTapeLine (TapeDelayLine& line, float value) noexcept;
     float getDivisionBeats() const noexcept;
     float getGlidePitchRatio() noexcept;
@@ -61,6 +61,7 @@ private:
     int channels { 2 };
     int maxDelaySamples { 1 };
     int preparedBlockSize { 512 };
+    float glideCoef { 0.0f };
 
     float mix { 0.25f };
     float feedback { 0.35f };
@@ -72,6 +73,8 @@ private:
     double tempoBpm { 120.0 };
 
     std::array<std::array<TapeDelayLine, numLines>, maxChannels> lines;
+    std::array<std::array<float, numLines>, maxChannels> currentDelaySamples {};
+    std::array<std::array<float, numLines>, maxChannels> targetDelaySamplesState {};
     std::array<float, numLines> lineOutputs {};
     std::array<float, numLines> feedbackVector {};
 
