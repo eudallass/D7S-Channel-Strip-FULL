@@ -51,11 +51,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_mix", 1 }, "Tube Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 100.0f));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "tube_bypass", 1 }, "Tube Bypass", true));
 
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_drive", 1 }, "Clipper Drive", juce::NormalisableRange<float> (0.0f, 24.0f), 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_ceiling", 1 }, "Clipper Ceiling", juce::NormalisableRange<float> (-24.0f, 0.0f), -0.1f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_shape", 1 }, "Clipper Shape", juce::NormalisableRange<float> (0.0f, 100.0f), 50.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_mix", 1 }, "Clipper Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 100.0f));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "clipper_bypass", 1 }, "Clipper Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_threshold", 1 }, "Clipper Threshold", juce::NormalisableRange<float> (-30.0f, 0.0f), -4.4f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_pre", 1 }, "Clipper Pre", juce::NormalisableRange<float> (-12.0f, 24.0f), 0.0f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_post", 1 }, "Clipper Post", juce::NormalisableRange<float> (-24.0f, 24.0f), 0.0f));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "clipper_bypass", 1 }, "Clipper Bypass", false));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_threshold", 1 }, "Esser Threshold", juce::NormalisableRange<float> (-60.0f, 0.0f), -24.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_freq", 1 }, "Esser Frequency", juce::NormalisableRange<float> (500.0f, 20000.0f), 7000.0f));
