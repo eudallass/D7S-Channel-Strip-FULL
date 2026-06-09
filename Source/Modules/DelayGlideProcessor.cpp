@@ -1,18 +1,20 @@
 #include "DelayGlideProcessor.h"
 #include <cmath>
 
-void DelayGlideProcessor::prepare (double sampleRate, int /*samplesPerBlock*/, int numChannels)
+void DelayGlideProcessor::prepare (double sampleRate, int samplesPerBlock, int numChannels)
 {
     sr = sampleRate > 0.0 ? sampleRate : 44100.0;
     channels = juce::jlimit (1, maxChannels, numChannels);
-    maxDelaySamples = (int) std::ceil (maxDelaySeconds * sr) + 8;
+    preparedBlockSize = juce::jmax (1, samplesPerBlock);
+    maxDelaySamples = (int) std::ceil (maxDelaySeconds * sr) + 32;
 
+    juce::dsp::ProcessSpec spec { sr, (juce::uint32) preparedBlockSize, 1 };
     for (auto& channelLines : lines)
     {
         for (auto& line : channelLines)
         {
-            line.buffer.assign ((size_t) maxDelaySamples, 0.0f);
-            line.writeIndex = 0;
+            line.setMaximumDelayInSamples (maxDelaySamples);
+            line.prepare (spec);
         }
     }
 
@@ -22,13 +24,8 @@ void DelayGlideProcessor::prepare (double sampleRate, int /*samplesPerBlock*/, i
 void DelayGlideProcessor::reset()
 {
     for (auto& channelLines : lines)
-    {
         for (auto& line : channelLines)
-        {
-            std::fill (line.buffer.begin(), line.buffer.end(), 0.0f);
-            line.writeIndex = 0;
-        }
-    }
+            line.reset();
 
     lineOutputs.fill (0.0f);
     feedbackVector.fill (0.0f);
@@ -94,31 +91,16 @@ float DelayGlideProcessor::getDivisionBeats() const noexcept
     }
 }
 
-float DelayGlideProcessor::readDelayLineLinear (DelayLine& line, float delaySamples) const noexcept
+float DelayGlideProcessor::readTapeLine (TapeDelayLine& line, float delaySamples) noexcept
 {
-    const int size = (int) line.buffer.size();
-    if (size <= 4)
-        return 0.0f;
-
-    delaySamples = juce::jlimit (1.0f, (float) size - 3.0f, delaySamples);
-    float readPosition = (float) line.writeIndex - delaySamples;
-    while (readPosition < 0.0f)
-        readPosition += (float) size;
-
-    const int index0 = (int) readPosition;
-    const int index1 = (index0 + 1) % size;
-    const float frac = readPosition - (float) index0;
-
-    return line.buffer[(size_t) index0] + frac * (line.buffer[(size_t) index1] - line.buffer[(size_t) index0]);
+    delaySamples = juce::jlimit (1.0f, (float) maxDelaySamples - 4.0f, delaySamples);
+    line.setDelay (delaySamples);
+    return line.popSample (0);
 }
 
-void DelayGlideProcessor::writeDelayLine (DelayLine& line, float value) noexcept
+void DelayGlideProcessor::writeTapeLine (TapeDelayLine& line, float value) noexcept
 {
-    if (line.buffer.empty())
-        return;
-
-    line.buffer[(size_t) line.writeIndex] = value;
-    line.writeIndex = (line.writeIndex + 1) % (int) line.buffer.size();
+    line.pushSample (0, value);
 }
 
 float DelayGlideProcessor::getGlidePitchRatio() noexcept
@@ -159,6 +141,8 @@ void DelayGlideProcessor::advanceGlidePhase() noexcept
 template <typename FloatType>
 void DelayGlideProcessor::process (juce::AudioBuffer<FloatType>& buffer)
 {
+    juce::ScopedNoDenormals noDenormals;
+
     if (bypassed || mix <= 0.0001f)
         return;
 
@@ -182,11 +166,9 @@ void DelayGlideProcessor::process (juce::AudioBuffer<FloatType>& buffer)
             {
                 auto& dl = lines[(size_t) ch][(size_t) line];
 
-                // Gemini-like delay spread: user rhythmic time is the anchor, prime-ish line offsets create FDN diffusion.
                 const float baseSeconds = baseMs[(size_t) line] * 0.001f;
                 const float scaledSeconds = juce::jlimit (0.012f, 2.0f, userDelaySeconds * (0.42f + 0.075f * (float) line) + baseSeconds * 0.35f);
 
-                // Supermassive reference config: Mod Rate 0.5 Hz, Mod Depth 50% hardcoded but kept subtle for delay clarity.
                 const float lfo = std::sin (juce::MathConstants<float>::twoPi * lfoPhase[(size_t) line]);
                 lfoPhase[(size_t) line] += 0.5f / (float) sr;
                 if (lfoPhase[(size_t) line] >= 1.0f)
@@ -195,14 +177,12 @@ void DelayGlideProcessor::process (juce::AudioBuffer<FloatType>& buffer)
                 const float modulation = 1.0f + lfo * 0.0125f;
                 const float delaySamples = scaledSeconds * (float) sr * modulation / pitchRatio;
 
-                lineOutputs[(size_t) line] = readDelayLineLinear (dl, delaySamples);
+                lineOutputs[(size_t) line] = readTapeLine (dl, delaySamples);
                 wetSum += lineOutputs[(size_t) line];
             }
 
             wetSum *= 1.0f / (float) numLines;
 
-            // 8x8 Hadamard-style orthogonal feedback matrix. This preserves energy and creates wide FDN diffusion.
-            // Density is intentionally low (~19%) by mixing mostly diagonal/self energy with a controlled Hadamard crossfeed.
             for (int line = 0; line < numLines; ++line)
             {
                 const float a0 = lineOutputs[0];
@@ -235,11 +215,10 @@ void DelayGlideProcessor::process (juce::AudioBuffer<FloatType>& buffer)
 
             for (int line = 0; line < numLines; ++line)
             {
-                // Small channel offset supports width 100% without needing a visible width control.
                 const float channelPolarity = (ch == 0 ? 1.0f : ((line % 2 == 0) ? -1.0f : 1.0f));
                 const float inputToNetwork = dry * (line == 0 || line == 3 || line == 5 ? 0.38f : 0.16f) * channelPolarity;
                 const float value = inputToNetwork + feedbackVector[(size_t) line] * feedback;
-                writeDelayLine (lines[(size_t) ch][(size_t) line], juce::jlimit (-2.0f, 2.0f, value));
+                writeTapeLine (lines[(size_t) ch][(size_t) line], juce::jlimit (-2.0f, 2.0f, value));
             }
 
             data[sample] = (FloatType) (dry * (1.0f - mix) + wetSum * mix);
