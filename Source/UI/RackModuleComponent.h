@@ -46,7 +46,7 @@ public:
         g.drawRoundedRectangle (outline, 8.0f, enabled ? 1.6f : 1.2f);
 
         g.setColour (enabled ? juce::Colours::white : juce::Colours::grey);
-        g.setFont (juce::FontOptions (19.0f, juce::Font::bold));
+        g.setFont (juce::Font (19.0f, juce::Font::bold));
         g.drawText (name, getLocalBounds().reduced (18, 0), juce::Justification::centredLeft);
 
         auto buttonArea = getBypassButtonArea().toFloat();
@@ -57,7 +57,7 @@ public:
         g.drawRoundedRectangle (buttonArea, 6.0f, 1.0f);
 
         g.setColour (juce::Colours::white);
-        g.setFont (juce::FontOptions (12.5f, juce::Font::bold));
+        g.setFont (juce::Font (12.5f, juce::Font::bold));
         g.drawText (enabled ? "ACTIVE" : "BYPASS", buttonArea.toNearestInt(), juce::Justification::centred);
 
         auto grip = getLocalBounds().removeFromLeft (12).reduced (4, 14);
