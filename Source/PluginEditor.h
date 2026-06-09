@@ -49,7 +49,6 @@ private:
             setLookAndFeel (&scrollbarLookAndFeel);
             setScrollBarsShown (false, true);
             setScrollBarThickness (12);
-            setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::nonHover);
             setSingleStepSizes (40, 40);
         }
 
