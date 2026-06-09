@@ -25,6 +25,7 @@ void TubeProcessor::prepare (double sampleRate, int, int numChannels)
 
     for (auto* s : { &beautySmooth, &beastSmooth, &sensitivitySmooth, &mixSmooth, &bypassWet })
         s->reset (sr, 0.015);
+
     reset();
 }
 
@@ -59,7 +60,7 @@ double TubeProcessor::tubeWaveshape (double x, double bias, double drive) noexce
     return shaped - bias;
 }
 
-double TubeProcessor::nextBiasDrift() noexcept
+double TubeProcessor::computeBiasDrift() noexcept
 {
     constexpr double lfoRateHz = 0.15;
     biasDriftPhase += lfoRateHz / juce::jmax (sr, 1.0);
@@ -104,7 +105,7 @@ void TubeProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
         const double sens = juce::Decibels::decibelsToGain (-12.0 + sensitivitySmooth.getNextValue() * 0.24);
         const double localMix = mixSmooth.getNextValue() / 100.0;
         const double wetMix = bypassWet.getNextValue();
-        const double drift = nextBiasDrift();
+        const double drift = computeBiasDrift();
 
         for (int ch = 0; ch < numCh; ++ch)
         {
