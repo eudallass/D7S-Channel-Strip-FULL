@@ -55,6 +55,7 @@ private:
     void writeTapeLine (TapeDelayLine& line, float value) noexcept;
     float getDivisionBeats() const noexcept;
     float getGlidePitchRatio() noexcept;
+    float getWowFlutterMultiplier() noexcept;
     void advanceGlidePhase() noexcept;
 
     double sr { 44100.0 };
@@ -80,7 +81,11 @@ private:
 
     // Gemini-like low-density FDN: prime-ish base times spread across up to 2 seconds.
     std::array<float, numLines> baseMs { 67.0f, 89.0f, 103.0f, 127.0f, 149.0f, 173.0f, 191.0f, 211.0f };
-    std::array<float, numLines> lfoPhase { 0.0f, 0.17f, 0.29f, 0.41f, 0.53f, 0.67f, 0.79f, 0.91f };
+
+    float wowPhase { 0.0f };
+    float flutterPhase { 0.0f };
+    std::mt19937 flutterRng { 1337 };
+    std::uniform_real_distribution<float> flutterDistribution { -1.0f, 1.0f };
 
     float glidePhase { 0.0f };
     int currentRandomDirection { 1 };
