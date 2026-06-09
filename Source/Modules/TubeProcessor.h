@@ -23,7 +23,7 @@ private:
     void processInternal (juce::AudioBuffer<FloatType>& buffer);
     static double onePoleCoeff (double frequency, double sampleRate) noexcept;
     static double tubeWaveshape (double x, double bias, double drive) noexcept;
-    double nextBiasDrift() noexcept;
+    double computeBiasDrift() noexcept;
     double processDcBlocker (int channel, double x) noexcept;
 
     std::atomic<float>* beautyParam { nullptr };
