@@ -44,6 +44,9 @@ void DelayGlideProcessor::reset()
 void DelayGlideProcessor::setMix (float percent) noexcept { mix = juce::jlimit (0.0f, 1.0f, percent / 100.0f); }
 void DelayGlideProcessor::setFeedback (float percent) noexcept { feedback = juce::jlimit (0.0f, 0.95f, percent / 100.0f * 0.95f); }
 void DelayGlideProcessor::setDelayDivision (int division) noexcept { delayDivision = juce::jlimit (0, 9, division); }
+void DelayGlideProcessor::setDelayMode (int mode) noexcept { delayMode = juce::jlimit (0, 3, mode); }
+void DelayGlideProcessor::setDelayFractionIndex (int index) noexcept { delayFractionIndex = juce::jlimit (0, 6, index); }
+void DelayGlideProcessor::setDelayTimeMs (float ms) noexcept { delayTimeMs = juce::jlimit (0.1f, 3000.0f, ms); }
 void DelayGlideProcessor::setBypass (bool shouldBypass) noexcept { bypassed = shouldBypass; }
 void DelayGlideProcessor::setGlideEnabled (bool enabled) noexcept { glideEnabled = enabled; }
 void DelayGlideProcessor::setGlideDirection (int direction) noexcept { glideDirection = juce::jlimit (0, 2, direction); }
@@ -56,6 +59,30 @@ float DelayGlideProcessor::getDivisionBeats() const noexcept
     {
         case div_1_32: return 0.125f; case div_1_16: return 0.25f; case div_1_8: return 0.5f; case div_1_4: return 1.0f; case div_1_2: return 2.0f; case div_1_1: return 4.0f; case div_1_8T: return 1.0f / 3.0f; case div_1_4T: return 2.0f / 3.0f; case div_1_8D: return 0.75f; case div_1_4D: return 1.5f; default: return 1.0f;
     }
+}
+
+float DelayGlideProcessor::getModeBeats() const noexcept
+{
+    static constexpr float noteBeats[7]    { 1.0f / 16.0f, 1.0f / 8.0f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f };
+    static constexpr float dottedBeats[5]  { 1.0f / 8.0f * 1.5f, 0.25f * 1.5f, 0.5f * 1.5f, 1.0f * 1.5f, 2.0f * 1.5f };
+    static constexpr float tripletBeats[5] { 1.0f / 8.0f * 2.0f / 3.0f, 0.25f * 2.0f / 3.0f, 0.5f * 2.0f / 3.0f, 1.0f * 2.0f / 3.0f, 2.0f * 2.0f / 3.0f };
+
+    if (delayMode == modeDotted)
+        return dottedBeats[juce::jlimit (0, 4, delayFractionIndex)];
+
+    if (delayMode == modeTriplet)
+        return tripletBeats[juce::jlimit (0, 4, delayFractionIndex)];
+
+    return noteBeats[juce::jlimit (0, 6, delayFractionIndex)];
+}
+
+float DelayGlideProcessor::getUserDelaySeconds() const noexcept
+{
+    if (delayMode == modeMsec)
+        return juce::jlimit (0.001f, 2.0f, delayTimeMs * 0.001f);
+
+    const float secondsPerBeat = 60.0f / (float) tempoBpm;
+    return juce::jlimit (0.02f, 2.0f, secondsPerBeat * getModeBeats());
 }
 
 float DelayGlideProcessor::readTapeLine (int ch, int lineIndex, float targetDelaySamples) noexcept
@@ -93,15 +120,10 @@ float DelayGlideProcessor::getWowFlutterMultiplier() noexcept
     constexpr float flutterRate = 5.5f;
     constexpr float wowDepth = 0.002f;
     constexpr float flutterDepth = 0.0008f;
-
     wowPhase += wowRate / (float) juce::jmax (sr, 1.0);
-    if (wowPhase >= 1.0f)
-        wowPhase -= 1.0f;
-
+    if (wowPhase >= 1.0f) wowPhase -= 1.0f;
     flutterPhase += flutterRate / (float) juce::jmax (sr, 1.0);
-    if (flutterPhase >= 1.0f)
-        flutterPhase -= 1.0f;
-
+    if (flutterPhase >= 1.0f) flutterPhase -= 1.0f;
     const float wow = std::sin (wowPhase * juce::MathConstants<float>::twoPi) * wowDepth;
     const float flutterSine = std::sin (flutterPhase * juce::MathConstants<float>::twoPi) * flutterDepth * 0.45f;
     const float flutterNoise = flutterDistribution (flutterRng) * flutterDepth * 0.55f;
@@ -111,7 +133,7 @@ float DelayGlideProcessor::getWowFlutterMultiplier() noexcept
 void DelayGlideProcessor::advanceGlidePhase() noexcept
 {
     const float secondsPerBeat = 60.0f / (float) tempoBpm;
-    const float cycleSeconds = juce::jmax (0.02f, secondsPerBeat * getDivisionBeats());
+    const float cycleSeconds = juce::jmax (0.02f, secondsPerBeat * getModeBeats());
     const float inc = 1.0f / (cycleSeconds * (float) sr);
     const float oldPhase = glidePhase;
     glidePhase += inc;
@@ -131,8 +153,7 @@ void DelayGlideProcessor::process (juce::AudioBuffer<FloatType>& buffer)
 
     const int numCh = juce::jmin (channels, buffer.getNumChannels());
     const int numSamples = buffer.getNumSamples();
-    const float secondsPerBeat = 60.0f / (float) tempoBpm;
-    const float userDelaySeconds = juce::jlimit (0.02f, 2.0f, secondsPerBeat * getDivisionBeats());
+    const float userDelaySeconds = getUserDelaySeconds();
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
