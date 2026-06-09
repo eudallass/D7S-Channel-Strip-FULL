@@ -38,11 +38,11 @@ jobs:
           codesign -dv --verbose=4 "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
           codesign --verify --deep --strict --verbose=4 "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
 
-      - name: Validate VST3
+      - name: Validate VST3 strict
         run: |
           pluginval/pluginval.app/Contents/MacOS/pluginval \
             --validate-in-process \
-            --strictness-level 5 \
+            --strictness-level 10 \
             "build/D7SChannelStripFull_artefacts/Release/VST3/D7S Channel Strip FULL.vst3"
 
       - name: Upload VST3
