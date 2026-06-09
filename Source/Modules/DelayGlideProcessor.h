@@ -22,6 +22,14 @@ public:
         div_1_4D
     };
 
+    enum DelayMode
+    {
+        modeMsec = 0,
+        modeNote,
+        modeDotted,
+        modeTriplet
+    };
+
     enum GlideDirection
     {
         glideUp = 0,
@@ -35,6 +43,9 @@ public:
     void setMix (float percent) noexcept;
     void setFeedback (float percent) noexcept;
     void setDelayDivision (int division) noexcept;
+    void setDelayMode (int mode) noexcept;
+    void setDelayFractionIndex (int index) noexcept;
+    void setDelayTimeMs (float ms) noexcept;
     void setBypass (bool shouldBypass) noexcept;
     void setGlideEnabled (bool enabled) noexcept;
     void setGlideDirection (int direction) noexcept;
@@ -54,6 +65,8 @@ private:
     float readTapeLine (int ch, int line, float targetDelaySamples) noexcept;
     void writeTapeLine (TapeDelayLine& line, float value) noexcept;
     float getDivisionBeats() const noexcept;
+    float getModeBeats() const noexcept;
+    float getUserDelaySeconds() const noexcept;
     float getGlidePitchRatio() noexcept;
     float getWowFlutterMultiplier() noexcept;
     void advanceGlidePhase() noexcept;
@@ -67,6 +80,9 @@ private:
     float mix { 0.25f };
     float feedback { 0.35f };
     int delayDivision { div_1_4 };
+    int delayMode { modeNote };
+    int delayFractionIndex { 2 };
+    float delayTimeMs { 250.0f };
     bool bypassed { true };
     bool glideEnabled { false };
     int glideDirection { glideUp };
