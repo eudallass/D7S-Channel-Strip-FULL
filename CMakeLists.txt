@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(D7SChannelStripFull VERSION 0.1.8)
+project(D7SChannelStripFull VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,6 +49,8 @@ target_compile_definitions(D7SChannelStripFull
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_DISPLAY_SPLASH_SCREEN=0
         JUCE_REPORT_APP_USAGE=0
+        D7S_RELEASE_CANDIDATE=1
+        D7S_RELEASE_CANDIDATE_LABEL="1.0.0-rc1"
 )
 
 target_link_libraries(D7SChannelStripFull
