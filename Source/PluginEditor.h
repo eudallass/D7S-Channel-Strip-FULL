@@ -20,6 +20,7 @@ public:
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
     class D7SScrollBarLookAndFeel final : public juce::LookAndFeel_V4
     {
@@ -123,6 +124,8 @@ private:
     void setupChoiceButtons (std::array<juce::TextButton, 2>& buttons, const juce::StringArray& labels, const juce::String& paramID);
     void setChoiceValue (const juce::String& paramID, int index);
     void syncChoiceButtons();
+    void syncDelayTimeLabel();
+    juce::String formatDelayFraction() const;
     void connectRackButton (RackModuleComponent& module, const juce::String& bypassParamID);
     void syncRackVisuals();
     void timerCallback() override;
@@ -177,7 +180,7 @@ private:
     ParamSlider tubeBeauty; ParamSlider tubeBeast; ParamSlider tubeSensitivity; ParamSlider tubeMix; juce::ToggleButton tubeBypassButton; std::unique_ptr<ButtonAttachment> tubeBypassAttachment;
     ParamSlider clipperPre; ParamSlider clipperThreshold; ParamSlider clipperPost; juce::ToggleButton clipperBypassButton; std::unique_ptr<ButtonAttachment> clipperBypassAttachment;
     ParamSlider esserThreshold; ParamSlider esserFreq; ParamSlider esserRange; std::array<juce::TextButton, 2> esserModeButtons { juce::TextButton { "Wide" }, juce::TextButton { "Split" } }; juce::Label esserMeterLabel; HorizontalMeter esserGrMeter; juce::ToggleButton esserBypassButton; std::unique_ptr<ButtonAttachment> esserBypassAttachment;
-    ParamSlider delayMix; ParamSlider delayFeedback; ParamSlider delayGlideTime; std::array<juce::TextButton, 5> delayTimeButtonsA { juce::TextButton { "1/32" }, juce::TextButton { "1/16" }, juce::TextButton { "1/8" }, juce::TextButton { "1/4" }, juce::TextButton { "1/2" } }; std::array<juce::TextButton, 5> delayTimeButtonsB { juce::TextButton { "1/1" }, juce::TextButton { "1/8T" }, juce::TextButton { "1/4T" }, juce::TextButton { "1/8D" }, juce::TextButton { "1/4D" } }; std::array<juce::TextButton, 3> delayDirectionButtons { juce::TextButton { "Up" }, juce::TextButton { "Down" }, juce::TextButton { "Random" } }; juce::ToggleButton delayGlideButton; juce::ToggleButton delayBypassButton; std::unique_ptr<ButtonAttachment> delayGlideAttachment; std::unique_ptr<ButtonAttachment> delayBypassAttachment;
+    ParamSlider delayMix; ParamSlider delayFeedback; ParamSlider delayGlideTime; ParamSlider delayTimeKnob; juce::ComboBox delayModeBox; juce::Label delayModeLabel; juce::Label delayTimeValueLabel; std::unique_ptr<ComboBoxAttachment> delayModeAttachment; std::unique_ptr<SliderAttachment> delayFractionAttachment; std::unique_ptr<SliderAttachment> delayTimeMsAttachment; std::array<juce::TextButton, 3> delayDirectionButtons { juce::TextButton { "Up" }, juce::TextButton { "Down" }, juce::TextButton { "Random" } }; juce::ToggleButton delayGlideButton; juce::ToggleButton delayBypassButton; std::unique_ptr<ButtonAttachment> delayGlideAttachment; std::unique_ptr<ButtonAttachment> delayBypassAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (D7SChannelStripFullAudioProcessorEditor)
 };
