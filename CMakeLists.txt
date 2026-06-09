@@ -31,6 +31,7 @@ target_sources(D7SChannelStripFull
         Source/UI/SpectrumDisplay.cpp
         Source/Core/ParameterLayout.cpp
         Source/Core/ModuleChain.cpp
+        Source/Core/PresetManager.cpp
         Source/Modules/NoiseGT1Processor.cpp
         Source/Modules/EQ4KProcessor.cpp
         Source/Modules/Comp76Processor.cpp
