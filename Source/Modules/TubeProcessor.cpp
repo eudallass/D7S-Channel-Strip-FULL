@@ -34,7 +34,7 @@ void TubeProcessor::reset()
     beastState.fill (0.0);
     dcX1.fill (0.0);
     dcY1.fill (0.0);
-    biasPhase = 0.0;
+    biasDriftPhase = 0.0;
     beautySmooth.setCurrentAndTargetValue (readParam (beautyParam, 0.0f));
     beastSmooth.setCurrentAndTargetValue (readParam (beastParam, 0.0f));
     sensitivitySmooth.setCurrentAndTargetValue (readParam (sensitivityParam, 50.0f));
@@ -61,11 +61,14 @@ double TubeProcessor::tubeWaveshape (double x, double bias, double drive) noexce
 
 double TubeProcessor::nextBiasDrift() noexcept
 {
-    biasPhase += 0.137 / juce::jmax (sr, 1.0);
-    if (biasPhase >= 1.0)
-        biasPhase -= 1.0;
+    constexpr double lfoRateHz = 0.15;
+    biasDriftPhase += lfoRateHz / juce::jmax (sr, 1.0);
+    if (biasDriftPhase >= 1.0)
+        biasDriftPhase -= 1.0;
 
-    return std::sin (biasPhase * juce::MathConstants<double>::twoPi) * 0.05;
+    const double lfo = std::sin (biasDriftPhase * juce::MathConstants<double>::twoPi);
+    const double jitter = ((double) biasJitterRng.nextFloat() - 0.5) * 0.4;
+    return (lfo + jitter * 0.3) * 0.05;
 }
 
 double TubeProcessor::processDcBlocker (int channel, double x) noexcept
@@ -80,6 +83,8 @@ double TubeProcessor::processDcBlocker (int channel, double x) noexcept
 template <typename FloatType>
 void TubeProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
 {
+    juce::ScopedNoDenormals noDenormals;
+
     const int numCh = juce::jmin (channels, buffer.getNumChannels());
     const int n = buffer.getNumSamples();
 
@@ -111,8 +116,8 @@ void TubeProcessor::processInternal (juce::AudioBuffer<FloatType>& buffer)
 
             const double highBand = driven - beautyState[(size_t) ch];
             const double lowBand = beastState[(size_t) ch];
-            const double beautyBias = 0.035 + drift * 0.035;
-            const double beastBias = -0.055 + drift * 0.055;
+            const double beautyBias = 0.035 * (1.0 + drift);
+            const double beastBias = -0.055 * (1.0 + drift);
             const double beautyWet = tubeWaveshape (highBand, beautyBias, 1.0 + beauty * 5.5);
             const double beastWet = tubeWaveshape (lowBand, beastBias, 1.0 + beast * 13.0);
 
