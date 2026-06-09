@@ -1,9 +1,9 @@
 #pragma once
 
 #include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <random>
-#include <vector>
 
 class DelayGlideProcessor
 {
@@ -49,14 +49,10 @@ private:
     static constexpr int numLines = 8;
     static constexpr double maxDelaySeconds = 2.2;
 
-    struct DelayLine
-    {
-        std::vector<float> buffer;
-        int writeIndex { 0 };
-    };
+    using TapeDelayLine = juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Lagrange3rd>;
 
-    float readDelayLineLinear (DelayLine& line, float delaySamples) const noexcept;
-    void writeDelayLine (DelayLine& line, float value) noexcept;
+    float readTapeLine (TapeDelayLine& line, float delaySamples) noexcept;
+    void writeTapeLine (TapeDelayLine& line, float value) noexcept;
     float getDivisionBeats() const noexcept;
     float getGlidePitchRatio() noexcept;
     void advanceGlidePhase() noexcept;
@@ -64,6 +60,7 @@ private:
     double sr { 44100.0 };
     int channels { 2 };
     int maxDelaySamples { 1 };
+    int preparedBlockSize { 512 };
 
     float mix { 0.25f };
     float feedback { 0.35f };
@@ -74,7 +71,7 @@ private:
     float glideTime { 0.35f };
     double tempoBpm { 120.0 };
 
-    std::array<std::array<DelayLine, numLines>, maxChannels> lines;
+    std::array<std::array<TapeDelayLine, numLines>, maxChannels> lines;
     std::array<float, numLines> lineOutputs {};
     std::array<float, numLines> feedbackVector {};
 
