@@ -27,7 +27,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "eq4k_hf_gain", 1 }, "EQ 4K HF Gain", juce::NormalisableRange<float> (-15.0f, 15.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "eq4k_hf_bell", 1 }, "EQ 4K HF Bell", false));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "eq4k_drive", 1 }, "EQ 4K Drive", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "eq4k_bypass", 1 }, "EQ 4K Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "eq4k_bypass", 1 }, "EQ 4K Bypass", false));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp76_input", 1 }, "76 Input", juce::NormalisableRange<float> (0.0f, 10.0f), 4.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp76_output", 1 }, "76 Output", juce::NormalisableRange<float> (0.0f, 10.0f), 5.0f));
@@ -35,7 +35,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp76_release", 1 }, "76 Release", juce::NormalisableRange<float> (1.0f, 7.0f), 5.0f));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "comp76_ratio", 1 }, "76 Ratio", juce::StringArray { "4", "8", "12", "20", "All" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "comp76_sc_hpf", 1 }, "76 SC HPF", juce::StringArray { "Off", "60", "90", "150" }, 0));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "comp76_bypass", 1 }, "76 Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "comp76_bypass", 1 }, "76 Bypass", false));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp2a_peak", 1 }, "2A Peak Reduction", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp2a_gain", 1 }, "2A Gain", juce::NormalisableRange<float> (0.0f, 100.0f), 40.0f));
@@ -43,25 +43,24 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp2a_emphasis", 1 }, "2A HF Emphasis", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "comp2a_mix", 1 }, "2A Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 100.0f));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "comp2a_sc_hpf", 1 }, "2A SC HPF", juce::StringArray { "Off", "60", "90", "150" }, 0));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "comp2a_bypass", 1 }, "2A Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "comp2a_bypass", 1 }, "2A Bypass", false));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_beauty", 1 }, "Tube Beauty", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_beast", 1 }, "Tube Beast", juce::NormalisableRange<float> (0.0f, 100.0f), 0.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_sensitivity", 1 }, "Tube Sensitivity", juce::NormalisableRange<float> (0.0f, 100.0f), 50.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "tube_mix", 1 }, "Tube Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 100.0f));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "tube_bypass", 1 }, "Tube Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "tube_bypass", 1 }, "Tube Bypass", false));
 
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_drive", 1 }, "Clipper Drive", juce::NormalisableRange<float> (0.0f, 24.0f), 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_ceiling", 1 }, "Clipper Ceiling", juce::NormalisableRange<float> (-24.0f, 0.0f), -0.1f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_shape", 1 }, "Clipper Shape", juce::NormalisableRange<float> (0.0f, 100.0f), 50.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_mix", 1 }, "Clipper Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 100.0f));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "clipper_bypass", 1 }, "Clipper Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_threshold", 1 }, "Clipper Threshold", juce::NormalisableRange<float> (-30.0f, 0.0f), -4.4f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_pre",       1 }, "Clipper Pre Gain", juce::NormalisableRange<float> (-12.0f, 24.0f), 0.0f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "clipper_post",      1 }, "Clipper Post Gain", juce::NormalisableRange<float> (-24.0f, 24.0f), 0.0f));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "clipper_bypass",    1 }, "Clipper Bypass", false));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_threshold", 1 }, "Esser Threshold", juce::NormalisableRange<float> (-60.0f, 0.0f), -24.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_freq", 1 }, "Esser Frequency", juce::NormalisableRange<float> (500.0f, 20000.0f), 7000.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "esser_range", 1 }, "Esser Range", juce::NormalisableRange<float> (0.0f, 24.0f), 12.0f));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "esser_mode", 1 }, "Esser Mode", juce::StringArray { "Wide", "Split" }, 1));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "esser_bypass", 1 }, "Esser Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "esser_bypass", 1 }, "Esser Bypass", false));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_mix", 1 }, "Delay Mix", juce::NormalisableRange<float> (0.0f, 100.0f), 25.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_feedback", 1 }, "Delay Feedback", juce::NormalisableRange<float> (0.0f, 100.0f), 35.0f));
@@ -69,7 +68,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout D7SChannelStripFullAudioProc
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "delay_mode", 1 }, "Delay Mode", juce::StringArray { "Msec", "Note", "Dotted", "Triplet" }, 1));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_fraction_index", 1 }, "Delay Fraction Index", juce::NormalisableRange<float> (0.0f, 6.0f, 1.0f), 2.0f));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_time_ms", 1 }, "Delay Time ms", juce::NormalisableRange<float> (0.1f, 3000.0f, 0.1f, 0.35f), 250.0f));
-    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "delay_bypass", 1 }, "Delay Bypass", true));
+    params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "delay_bypass", 1 }, "Delay Bypass", false));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "delay_glide_on", 1 }, "Delay Glide", false));
     params.push_back (std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { "delay_glide_direction", 1 }, "Delay Glide Direction", juce::StringArray { "Up", "Down", "Random" }, 0));
     params.push_back (std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "delay_glide_time", 1 }, "Delay Glide Time", juce::NormalisableRange<float> (0.0f, 100.0f), 35.0f));
