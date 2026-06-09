@@ -15,7 +15,8 @@
 #include "Modules/EsserProcessor.h"
 #include "Modules/DelayGlideProcessor.h"
 
-class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
+class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor,
+                                          private juce::Thread
 {
 public:
     static constexpr int spectrumOrder = 11;
@@ -77,6 +78,8 @@ public:
     float getPostSpectrumBinDb (int index) const noexcept;
 
 private:
+    static constexpr int analyzerQueueSize = spectrumFFTSize * 4;
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     template <typename FloatType>
@@ -90,6 +93,9 @@ private:
     void pushSpectrumSample (float sample) noexcept;
     void pushPreSpectrumSample (float sample) noexcept;
     void pushPostSpectrumSample (float sample) noexcept;
+    void pushAnalyzerSample (juce::AbstractFifo& fifo, std::array<float, analyzerQueueSize>& queue, float sample) noexcept;
+    void drainAnalyzerFifo (juce::AbstractFifo& fifo, std::array<float, analyzerQueueSize>& queue, std::array<float, spectrumFFTSize>& accumulation, int& accumulationIndex, bool pre);
+    void run() override;
     void runSpectrumFFT() noexcept;
     void runPreSpectrumFFT() noexcept;
     void runPostSpectrumFFT() noexcept;
@@ -127,6 +133,10 @@ private:
 
     juce::dsp::FFT spectrumFFT { spectrumOrder };
     juce::dsp::WindowingFunction<float> spectrumWindow { spectrumFFTSize, juce::dsp::WindowingFunction<float>::hann, false };
+    juce::AbstractFifo preAnalyzerFifo { analyzerQueueSize };
+    juce::AbstractFifo postAnalyzerFifo { analyzerQueueSize };
+    std::array<float, analyzerQueueSize> preAnalyzerQueue {};
+    std::array<float, analyzerQueueSize> postAnalyzerQueue {};
     std::array<float, spectrumFFTSize> spectrumFifo {};
     std::array<float, spectrumFFTSize> preSpectrumFifo {};
     std::array<float, spectrumFFTSize> postSpectrumFifo {};
