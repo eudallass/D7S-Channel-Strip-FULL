@@ -10,6 +10,7 @@ namespace
     static double peakDbFromLinear (double value) { return juce::Decibels::gainToDecibels (juce::jmax (value, 1.0e-9)); }
     static float logFrequencyForBin (int index, int totalBins) { const float minHz = 20.0f; const float maxHz = 20000.0f; const float normalised = (float) index / (float) juce::jmax (1, totalBins - 1); return minHz * std::pow (maxHz / minHz, normalised); }
     static float analyzerReleaseCoeffForSpeed (int speedIndex) noexcept { switch (speedIndex) { case 0: return 0.40f; case 1: return 0.20f; case 2: return 0.10f; case 3: return 0.04f; case 4: return 0.015f; default: return 0.04f; } }
+    static void storeMeterWithDecay (std::atomic<float>& meter, float target) noexcept { const float current = meter.load(); const float smoothed = target > current ? target : current * 0.99f + target * 0.01f; meter.store (smoothed); }
 }
 
 D7SChannelStripFullAudioProcessor::D7SChannelStripFullAudioProcessor()
@@ -42,7 +43,6 @@ void D7SChannelStripFullAudioProcessor::cacheParameterPointers()
     analyzerReferenceDbParam = apvts.getRawParameterValue ("analyzer_reference_db");
     analyzerFreezeParam = apvts.getRawParameterValue ("analyzer_freeze");
     analyzerAutoRangeParam = apvts.getRawParameterValue ("analyzer_auto_range");
-
     noiseGT1.cacheParameters (apvts); eq4k.cacheParameters (apvts); comp76.cacheParameters (apvts); comp2a.cacheParameters (apvts); tube.cacheParameters (apvts); clipper.cacheParameters (apvts); esser.cacheParameters (apvts);
 }
 
@@ -108,10 +108,8 @@ void D7SChannelStripFullAudioProcessor::pushAnalyzerSample (juce::AbstractFifo& 
 {
     int start1 = 0, size1 = 0, start2 = 0, size2 = 0;
     fifo.prepareToWrite (1, start1, size1, start2, size2);
-    if (size1 > 0)
-        queue[(size_t) start1] = sample;
-    else if (size2 > 0)
-        queue[(size_t) start2] = sample;
+    if (size1 > 0) queue[(size_t) start1] = sample;
+    else if (size2 > 0) queue[(size_t) start2] = sample;
     fifo.finishedWrite (size1 + size2);
 }
 
@@ -139,8 +137,7 @@ void D7SChannelStripFullAudioProcessor::drainAnalyzerFifo (juce::AbstractFifo& f
                 }
             }
         };
-        consume (start1, size1);
-        consume (start2, size2);
+        consume (start1, size1); consume (start2, size2);
         fifo.finishedRead (size1 + size2);
         available -= (size1 + size2);
     }
@@ -175,14 +172,8 @@ void D7SChannelStripFullAudioProcessor::runPreSpectrumFFT() noexcept
         const float f1 = logFrequencyForBin (juce::jmin (band + 1, numSpectrumBins - 1), numSpectrumBins);
         const int bin0 = juce::jlimit (1, fftBins - 1, (int) std::floor ((f0 / nyquist) * (float) fftBins));
         const int bin1 = juce::jlimit (bin0 + 1, fftBins, (int) std::ceil ((f1 / nyquist) * (float) fftBins));
-        float energy = 0.0f;
-        int count = 0;
-        for (int bin = bin0; bin < bin1; ++bin)
-        {
-            const float mag = preSpectrumFftData[(size_t) bin] / (float) spectrumFFTSize;
-            energy += mag * mag;
-            ++count;
-        }
+        float energy = 0.0f; int count = 0;
+        for (int bin = bin0; bin < bin1; ++bin) { const float mag = preSpectrumFftData[(size_t) bin] / (float) spectrumFFTSize; energy += mag * mag; ++count; }
         const float rms = std::sqrt (energy / (float) juce::jmax (1, count));
         float targetDb = juce::Decibels::gainToDecibels (rms, -120.0f) + 42.0f;
         targetDb = juce::jlimit (-120.0f, 24.0f, targetDb);
@@ -211,14 +202,8 @@ void D7SChannelStripFullAudioProcessor::runPostSpectrumFFT() noexcept
         const float f1 = logFrequencyForBin (juce::jmin (band + 1, numSpectrumBins - 1), numSpectrumBins);
         const int bin0 = juce::jlimit (1, fftBins - 1, (int) std::floor ((f0 / nyquist) * (float) fftBins));
         const int bin1 = juce::jlimit (bin0 + 1, fftBins, (int) std::ceil ((f1 / nyquist) * (float) fftBins));
-        float energy = 0.0f;
-        int count = 0;
-        for (int bin = bin0; bin < bin1; ++bin)
-        {
-            const float mag = postSpectrumFftData[(size_t) bin] / (float) spectrumFFTSize;
-            energy += mag * mag;
-            ++count;
-        }
+        float energy = 0.0f; int count = 0;
+        for (int bin = bin0; bin < bin1; ++bin) { const float mag = postSpectrumFftData[(size_t) bin] / (float) spectrumFFTSize; energy += mag * mag; ++count; }
         const float rms = std::sqrt (energy / (float) juce::jmax (1, count));
         float targetDb = juce::Decibels::gainToDecibels (rms, -120.0f) + 42.0f;
         targetDb = juce::jlimit (-120.0f, 24.0f, targetDb);
@@ -237,8 +222,7 @@ void D7SChannelStripFullAudioProcessor::prepareToPlay (double sampleRate, int sa
     currentSampleRate = sampleRate;
     noiseGT1.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels()); eq4k.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels()); comp76.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels()); comp2a.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels()); tube.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels()); clipper.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels()); esser.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels()); delayGlide.prepare (sampleRate, samplesPerBlock, getTotalNumOutputChannels());
     resetInternalStates();
-    if (! isThreadRunning())
-        startThread (juce::Thread::Priority::low);
+    if (! isThreadRunning()) startThread (juce::Thread::Priority::low);
 }
 
 void D7SChannelStripFullAudioProcessor::releaseResources()
@@ -284,7 +268,6 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
     syncAnalyzerParameters();
     for (auto channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel) buffer.clear (channel, 0, buffer.getNumSamples());
     if (readAtomic (masterBypassParam, 0.0f) > 0.5f) return;
-
     const int numCh = buffer.getNumChannels();
     const int n = buffer.getNumSamples();
     const double rackIn = juce::Decibels::decibelsToGain ((double) readAtomic (rackInputParam, 0.0f));
@@ -292,39 +275,26 @@ void D7SChannelStripFullAudioProcessor::processAudioBlock (juce::AudioBuffer<Flo
     const double rackMix = readAtomic (rackMixParam, 100.0f) / 100.0;
     double inputPeak = 0.0, outputPeak = 0.0;
     juce::AudioBuffer<FloatType> rackDry (numCh, n);
-
     for (int ch = 0; ch < numCh; ++ch)
     {
-        auto* data = buffer.getWritePointer (ch);
-        auto* dry = rackDry.getWritePointer (ch);
-        for (int i = 0; i < n; ++i)
-        {
-            data[i] = (FloatType) ((double) data[i] * rackIn);
-            dry[i] = data[i];
-            inputPeak = juce::jmax (inputPeak, std::abs ((double) data[i]));
-            if (ch == 0) pushPreSpectrumSample ((float) data[i]);
-        }
+        auto* data = buffer.getWritePointer (ch); auto* dry = rackDry.getWritePointer (ch);
+        for (int i = 0; i < n; ++i) { data[i] = (FloatType) ((double) data[i] * rackIn); dry[i] = data[i]; inputPeak = juce::jmax (inputPeak, std::abs ((double) data[i])); if (ch == 0) pushPreSpectrumSample ((float) data[i]); }
     }
-
     double bpm = 120.0;
     if (auto* playHead = getPlayHead()) { juce::AudioPlayHead::CurrentPositionInfo info; if (playHead->getCurrentPosition (info) && info.bpm > 0.0) bpm = info.bpm; }
     const auto order = getModuleOrder();
     for (int slot = 0; slot < numRackModules; ++slot) processModuleById (order[(size_t) slot], buffer, bpm);
-
     for (int ch = 0; ch < numCh; ++ch)
     {
-        auto* data = buffer.getWritePointer (ch);
-        auto* dry = rackDry.getReadPointer (ch);
+        auto* data = buffer.getWritePointer (ch); auto* dry = rackDry.getReadPointer (ch);
         for (int i = 0; i < n; ++i)
         {
             double x = (double) dry[i] * (1.0 - rackMix) + (double) data[i] * rackMix;
-            x *= rackOut;
-            outputPeak = juce::jmax (outputPeak, std::abs (x));
-            data[i] = (FloatType) juce::jlimit (-4.0, 4.0, x);
-            if (ch == 0) pushPostSpectrumSample ((float) x);
+            x *= rackOut; outputPeak = juce::jmax (outputPeak, std::abs (x)); data[i] = (FloatType) juce::jlimit (-4.0, 4.0, x); if (ch == 0) pushPostSpectrumSample ((float) x);
         }
     }
-    rackInputPeakDb.store ((float) peakDbFromLinear (inputPeak)); rackOutputPeakDb.store ((float) peakDbFromLinear (outputPeak));
+    storeMeterWithDecay (rackInputPeakDb, (float) peakDbFromLinear (inputPeak));
+    storeMeterWithDecay (rackOutputPeakDb, (float) peakDbFromLinear (outputPeak));
 }
 
 void D7SChannelStripFullAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { processAudioBlock (buffer); }
