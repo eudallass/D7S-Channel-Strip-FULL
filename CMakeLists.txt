@@ -28,7 +28,8 @@ target_sources(D7SChannelStripFull
     PRIVATE
         Source/PluginProcessor_Tier1.cpp
         Source/PluginEditor.cpp
-        Source/UI/SpectrumDisplay.cpp
+        Source/Core/SpectrumAnalyzer.cpp
+        Source/UI/SpectrumAnalyzerComponent.cpp
         Source/Core/ParameterLayout.cpp
         Source/Core/ModuleChain.cpp
         Source/Core/PresetManager.cpp
