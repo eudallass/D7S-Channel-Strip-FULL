@@ -3,9 +3,10 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
+#include <memory>
 #include "PluginProcessor.h"
 #include "UI/RackModuleComponent.h"
-#include "UI/SpectrumDisplay.h"
+#include "UI/SpectrumAnalyzerComponent.h"
 
 class D7SChannelStripFullAudioProcessorEditor : public juce::AudioProcessorEditor,
                                                 private juce::Timer
@@ -106,15 +107,6 @@ private:
         bool grMode { false };
     };
 
-    class SpectrumView : public juce::Component
-    {
-    public:
-        explicit SpectrumView (D7SChannelStripFullAudioProcessor& p) : processor (p) {}
-        void paint (juce::Graphics& g) override;
-    private:
-        D7SChannelStripFullAudioProcessor& processor;
-    };
-
     void setUIScale (float newScale);
     void updateScaleButtonStates();
     void setupSlider (ParamSlider& control, const juce::String& labelText, const juce::String& paramID);
@@ -170,7 +162,7 @@ private:
 
     ParamSlider rackInput; ParamSlider rackOutput; ParamSlider rackMix;
     juce::Label rackMeterLabel; HorizontalMeter rackInMeter; HorizontalMeter rackOutMeter;
-    SpectrumDisplay spectrumView { audioProcessor };
+    std::unique_ptr<SpectrumAnalyzerComponent> analyzerView;
 
     ParamSlider noiseSuppression; juce::Label noiseMeterLabel; HorizontalMeter noiseGrMeter; juce::ToggleButton noiseBypassButton; std::unique_ptr<ButtonAttachment> noiseBypassAttachment;
     ParamSlider eqHpf; ParamSlider eqLpf; ParamSlider eqLfFreq; ParamSlider eqLfGain; ParamSlider eqLmfFreq; ParamSlider eqLmfGain; ParamSlider eqLmfQ; ParamSlider eqHmfFreq; ParamSlider eqHmfGain; ParamSlider eqHmfQ; ParamSlider eqHfFreq; ParamSlider eqHfGain; ParamSlider eqDrive;
