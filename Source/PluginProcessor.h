@@ -1,11 +1,10 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <atomic>
 
-#include "Core/AnalyzerState.h"
+#include "Core/SpectrumAnalyzer.h"
 #include "Modules/NoiseGT1Processor.h"
 #include "Modules/EQ4KProcessor.h"
 #include "Modules/Comp76Processor.h"
@@ -15,13 +14,9 @@
 #include "Modules/EsserProcessor.h"
 #include "Modules/DelayGlideProcessor.h"
 
-class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor,
-                                          private juce::Thread
+class D7SChannelStripFullAudioProcessor : public juce::AudioProcessor
 {
 public:
-    static constexpr int spectrumOrder = 11;
-    static constexpr int spectrumFFTSize = 1 << spectrumOrder;
-    static constexpr int numSpectrumBins = 96;
     static constexpr int numRackModules = 8;
 
     enum ModuleIndex
@@ -62,7 +57,9 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
-    const AnalyzerState& getAnalyzerState() const noexcept { return analyzerState; }
+
+    SpectrumAnalyzer preAnalyzer;
+    SpectrumAnalyzer postAnalyzer;
 
     void setModuleOrder (const std::array<int, numRackModules>& newOrder) noexcept;
     std::array<int, numRackModules> getModuleOrder() const noexcept;
@@ -73,32 +70,20 @@ public:
     float getComp76GainReductionDb() const noexcept { return comp76.getGainReductionDb(); }
     float getComp2AGainReductionDb() const noexcept { return comp2a.getGainReductionDb(); }
     float getEsserGainReductionDb() const noexcept { return esser.getGainReductionDb(); }
-    float getSpectrumBinDb (int index) const noexcept;
-    float getPreSpectrumBinDb (int index) const noexcept;
-    float getPostSpectrumBinDb (int index) const noexcept;
 
 private:
-    static constexpr int analyzerQueueSize = spectrumFFTSize * 4;
-
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     template <typename FloatType>
     void processAudioBlock (juce::AudioBuffer<FloatType>& buffer);
 
     template <typename FloatType>
+    void pushAnalyzerBuffer (SpectrumAnalyzer& analyzer, juce::AudioBuffer<FloatType>& buffer) noexcept;
+
+    template <typename FloatType>
     void processModuleById (int moduleId, juce::AudioBuffer<FloatType>& buffer, double bpm);
 
     void cacheParameterPointers();
-    void syncAnalyzerParameters() noexcept;
-    void pushSpectrumSample (float sample) noexcept;
-    void pushPreSpectrumSample (float sample) noexcept;
-    void pushPostSpectrumSample (float sample) noexcept;
-    void pushAnalyzerSample (juce::AbstractFifo& fifo, std::array<float, analyzerQueueSize>& queue, float sample) noexcept;
-    void drainAnalyzerFifo (juce::AbstractFifo& fifo, std::array<float, analyzerQueueSize>& queue, std::array<float, spectrumFFTSize>& accumulation, int& accumulationIndex, bool pre);
-    void run() override;
-    void runSpectrumFFT() noexcept;
-    void runPreSpectrumFFT() noexcept;
-    void runPostSpectrumFFT() noexcept;
     void resetInternalStates();
 
     juce::AudioProcessorValueTreeState apvts;
@@ -116,43 +101,9 @@ private:
     std::atomic<float>* rackOutputParam { nullptr };
     std::atomic<float>* rackMixParam { nullptr };
     std::atomic<float>* masterBypassParam { nullptr };
-    std::atomic<float>* analyzerPreEnabledParam { nullptr };
-    std::atomic<float>* analyzerPostEnabledParam { nullptr };
-    std::atomic<float>* analyzerResolutionParam { nullptr };
-    std::atomic<float>* analyzerSpeedParam { nullptr };
-    std::atomic<float>* analyzerTiltParam { nullptr };
-    std::atomic<float>* analyzerRangeParam { nullptr };
-    std::atomic<float>* analyzerReferenceDbParam { nullptr };
-    std::atomic<float>* analyzerFreezeParam { nullptr };
-    std::atomic<float>* analyzerAutoRangeParam { nullptr };
 
     double currentSampleRate { 44100.0 };
     std::array<std::atomic<int>, numRackModules> rackModuleOrder {};
-
-    AnalyzerState analyzerState;
-
-    juce::dsp::FFT spectrumFFT { spectrumOrder };
-    juce::dsp::WindowingFunction<float> spectrumWindow { spectrumFFTSize, juce::dsp::WindowingFunction<float>::hann, false };
-    juce::AbstractFifo preAnalyzerFifo { analyzerQueueSize };
-    juce::AbstractFifo postAnalyzerFifo { analyzerQueueSize };
-    std::array<float, analyzerQueueSize> preAnalyzerQueue {};
-    std::array<float, analyzerQueueSize> postAnalyzerQueue {};
-    std::array<float, spectrumFFTSize> spectrumFifo {};
-    std::array<float, spectrumFFTSize> preSpectrumFifo {};
-    std::array<float, spectrumFFTSize> postSpectrumFifo {};
-    std::array<float, spectrumFFTSize * 2> spectrumFftData {};
-    std::array<float, spectrumFFTSize * 2> preSpectrumFftData {};
-    std::array<float, spectrumFFTSize * 2> postSpectrumFftData {};
-    std::array<float, numSpectrumBins> spectrumSmoothedDb {};
-    std::array<float, numSpectrumBins> spectrumPeakDb {};
-    std::array<float, numSpectrumBins> preSpectrumSmoothedDb {};
-    std::array<float, numSpectrumBins> postSpectrumSmoothedDb {};
-    std::array<float, numSpectrumBins> preSpectrumPeakDb {};
-    std::array<float, numSpectrumBins> postSpectrumPeakDb {};
-    std::array<std::atomic<float>, numSpectrumBins> spectrumBinsDb {};
-    int spectrumFifoIndex { 0 };
-    int preSpectrumFifoIndex { 0 };
-    int postSpectrumFifoIndex { 0 };
 
     std::atomic<float> rackInputPeakDb  { -120.0f };
     std::atomic<float> rackOutputPeakDb { -120.0f };
