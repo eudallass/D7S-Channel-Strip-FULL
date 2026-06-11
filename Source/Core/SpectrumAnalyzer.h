@@ -5,18 +5,6 @@
 #include <atomic>
 #include <cmath>
 
-/**
- *  High-quality spectrum analyzer in the style of FabFilter Pro-Q 4 / Waves PAZ Analyzer.
- *
- *  - 8192-point FFT with 75% overlap (hop = 2048) for smooth, high-resolution display.
- *  - Hann window with coherent-gain correction so a 0 dBFS sine reads 0 dB on the meter.
- *  - 1/24-octave smoothing in log-frequency domain (peak within band for detail).
- *  - +4.5 dB/octave tilt (Pro-Q 4 default) referenced at 1 kHz.
- *  - Configurable decay (default 30 dB/s) — instant attack, smooth fall.
- *  - Lock-free audio -> UI thread handoff using complete FFT-frame snapshots.
- *  - Zero added latency to the audio path: the analyzer only observes samples.
- *  - FFT runs on the UI timer thread, NEVER on the audio thread.
- */
 class SpectrumAnalyzer
 {
 public:
@@ -45,6 +33,8 @@ public:
     void setTiltReferenceHz        (float hz)        noexcept { tiltReferenceHz = hz; }
     void setFrequencyRange         (float lowHz, float highHz) noexcept { minFreq = lowHz; maxFreq = highHz; }
     void setDecibelRange           (float lowDb, float highDb) noexcept { minDb = lowDb; maxDb = highDb; }
+    void setPeakBlend              (float blend) noexcept { peakBlend = juce::jlimit (0.0f, 1.0f, blend); }
+    void setTemporalSmoothingMs    (float ms) noexcept { temporalSmoothingMs = juce::jlimit (0.0f, 500.0f, ms); }
 
     float getMinFreq() const noexcept { return minFreq; }
     float getMaxFreq() const noexcept { return maxFreq; }
@@ -90,6 +80,8 @@ private:
     float  decayDbPerSec    = 30.0f;
     float  tiltDbPerOctave  = 4.5f;
     float  tiltReferenceHz  = 1000.0f;
+    float  peakBlend        = 0.62f;
+    float  temporalSmoothingMs = 75.0f;
 
     juce::int64 lastFrameTimeMs = 0;
 
