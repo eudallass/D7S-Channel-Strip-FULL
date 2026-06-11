@@ -30,13 +30,158 @@ SpectrumAnalyzerComponent::SpectrumAnalyzerComponent (SpectrumAnalyzer& a, Spect
     : pre (a), post (b)
 {
     setOpaque (false);
-    setInterceptsMouseClicks (false, false);
+    setInterceptsMouseClicks (true, true);
+
+    for (auto* button : { &preButton, &postButton, &speedButton, &smoothButton, &tiltButton })
+    {
+        setupButton (*button);
+        addAndMakeVisible (*button);
+    }
+
+    preButton.onClick = [this]
+    {
+        setShowPre (! showPre);
+    };
+
+    postButton.onClick = [this]
+    {
+        setShowPost (! showPost);
+    };
+
+    speedButton.onClick = [this]
+    {
+        if (speedMode == SpeedMode::Fast)      speedMode = SpeedMode::Medium;
+        else if (speedMode == SpeedMode::Medium) speedMode = SpeedMode::Slow;
+        else                                  speedMode = SpeedMode::Fast;
+
+        applySpeedMode();
+    };
+
+    smoothButton.onClick = [this]
+    {
+        if (smoothMode == SmoothMode::Detailed)      smoothMode = SmoothMode::Normal;
+        else if (smoothMode == SmoothMode::Normal)   smoothMode = SmoothMode::Smooth;
+        else                                        smoothMode = SmoothMode::Detailed;
+
+        applySmoothMode();
+    };
+
+    tiltButton.onClick = [this]
+    {
+        tiltEnabled = ! tiltEnabled;
+        applyTiltMode();
+    };
+
+    applySpeedMode();
+    applySmoothMode();
+    applyTiltMode();
     startTimerHz (30);
 }
 
 SpectrumAnalyzerComponent::~SpectrumAnalyzerComponent()
 {
     stopTimer();
+}
+
+void SpectrumAnalyzerComponent::setShowPre (bool shouldShow) noexcept
+{
+    showPre = shouldShow;
+    updateButtonText();
+    repaint();
+}
+
+void SpectrumAnalyzerComponent::setShowPost (bool shouldShow) noexcept
+{
+    showPost = shouldShow;
+    updateButtonText();
+    repaint();
+}
+
+void SpectrumAnalyzerComponent::setupButton (juce::TextButton& button)
+{
+    button.setWantsKeyboardFocus (false);
+    button.setTriggeredOnMouseDown (false);
+    button.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff181818));
+    button.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff222222));
+    button.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffb8b8b8));
+    button.setColour (juce::TextButton::textColourOnId, juce::Colour (0xff00d4ff));
+}
+
+void SpectrumAnalyzerComponent::updateButtonText()
+{
+    preButton.setButtonText (showPre ? "PRE" : "pre");
+    postButton.setButtonText (showPost ? "POST" : "post");
+
+    if (speedMode == SpeedMode::Fast)          speedButton.setButtonText ("FAST");
+    else if (speedMode == SpeedMode::Medium)  speedButton.setButtonText ("MED");
+    else                                      speedButton.setButtonText ("SLOW");
+
+    if (smoothMode == SmoothMode::Detailed)       smoothButton.setButtonText ("1/48");
+    else if (smoothMode == SmoothMode::Normal)    smoothButton.setButtonText ("1/24");
+    else                                         smoothButton.setButtonText ("1/12");
+
+    tiltButton.setButtonText (tiltEnabled ? "TILT" : "FLAT");
+}
+
+void SpectrumAnalyzerComponent::applySpeedMode()
+{
+    if (speedMode == SpeedMode::Fast)
+    {
+        pre.setDecayDbPerSecond (55.0f);
+        post.setDecayDbPerSecond (55.0f);
+        pre.setTemporalSmoothingMs (35.0f);
+        post.setTemporalSmoothingMs (35.0f);
+    }
+    else if (speedMode == SpeedMode::Medium)
+    {
+        pre.setDecayDbPerSecond (30.0f);
+        post.setDecayDbPerSecond (30.0f);
+        pre.setTemporalSmoothingMs (75.0f);
+        post.setTemporalSmoothingMs (75.0f);
+    }
+    else
+    {
+        pre.setDecayDbPerSecond (16.0f);
+        post.setDecayDbPerSecond (16.0f);
+        pre.setTemporalSmoothingMs (150.0f);
+        post.setTemporalSmoothingMs (150.0f);
+    }
+
+    updateButtonText();
+}
+
+void SpectrumAnalyzerComponent::applySmoothMode()
+{
+    if (smoothMode == SmoothMode::Detailed)
+    {
+        pre.setSmoothingOctaveFraction (1.0f / 48.0f);
+        post.setSmoothingOctaveFraction (1.0f / 48.0f);
+        pre.setPeakBlend (0.75f);
+        post.setPeakBlend (0.75f);
+    }
+    else if (smoothMode == SmoothMode::Normal)
+    {
+        pre.setSmoothingOctaveFraction (1.0f / 24.0f);
+        post.setSmoothingOctaveFraction (1.0f / 24.0f);
+        pre.setPeakBlend (0.62f);
+        post.setPeakBlend (0.62f);
+    }
+    else
+    {
+        pre.setSmoothingOctaveFraction (1.0f / 12.0f);
+        post.setSmoothingOctaveFraction (1.0f / 12.0f);
+        pre.setPeakBlend (0.45f);
+        post.setPeakBlend (0.45f);
+    }
+
+    updateButtonText();
+}
+
+void SpectrumAnalyzerComponent::applyTiltMode()
+{
+    pre.setTiltDbPerOctave (tiltEnabled ? 4.5f : 0.0f);
+    post.setTiltDbPerOctave (tiltEnabled ? 4.5f : 0.0f);
+    updateButtonText();
 }
 
 void SpectrumAnalyzerComponent::timerCallback()
@@ -80,9 +225,6 @@ void SpectrumAnalyzerComponent::buildPath (juce::Path& path,
     const float logMin = std::log (post.getMinFreq());
     const float logMax = std::log (post.getMaxFreq());
 
-    // The analyzer core writes displayData in log-frequency order. Rebuilding the
-    // frequency for each scope index here keeps the curve, grid and labels tied to
-    // the same log-frequency mapping and avoids future linear/log mismatch bugs.
     for (size_t i = 0; i < data.size(); ++i)
     {
         const float t = (float) i / (float) (data.size() - 1);
@@ -176,6 +318,17 @@ void SpectrumAnalyzerComponent::paint (juce::Graphics& g)
 
 void SpectrumAnalyzerComponent::resized()
 {
+    auto top = getLocalBounds().reduced (8, 6).removeFromTop (18);
+    top.removeFromLeft (118);
+
+    const int buttonW = 48;
+    const int gap = 5;
+    for (auto* button : { &preButton, &postButton, &speedButton, &smoothButton, &tiltButton })
+    {
+        button->setBounds (top.removeFromLeft (buttonW));
+        top.removeFromLeft (gap);
+    }
+
     buildPath (prePath,  pre.getDisplayData());
     buildPath (postPath, post.getDisplayData());
 }
