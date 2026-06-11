@@ -20,6 +20,7 @@ public:
 private:
     enum class SpeedMode { Fast, Medium, Slow };
     enum class SmoothMode { Detailed, Normal, Smooth };
+    enum class RangeMode { Full, Mix, Focus };
 
     void timerCallback() override;
     void buildPath (juce::Path& path,
@@ -32,22 +33,27 @@ private:
     void applySpeedMode();
     void applySmoothMode();
     void applyTiltMode();
+    void applyRangeMode();
 
     SpectrumAnalyzer& pre;
     SpectrumAnalyzer& post;
     juce::Path prePath, postPath;
 
-    juce::TextButton preButton   { "PRE" };
-    juce::TextButton postButton  { "POST" };
-    juce::TextButton speedButton { "SPD" };
+    juce::TextButton preButton    { "PRE" };
+    juce::TextButton postButton   { "POST" };
+    juce::TextButton speedButton  { "SPD" };
     juce::TextButton smoothButton { "SMTH" };
-    juce::TextButton tiltButton  { "TILT" };
+    juce::TextButton tiltButton   { "TILT" };
+    juce::TextButton rangeButton  { "RNG" };
+    juce::TextButton holdButton   { "HOLD" };
 
     bool showPre  = true;
     bool showPost = true;
     bool tiltEnabled = true;
+    bool frozen = false;
     SpeedMode speedMode = SpeedMode::Medium;
     SmoothMode smoothMode = SmoothMode::Normal;
+    RangeMode rangeMode = RangeMode::Full;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SpectrumAnalyzerComponent)
 };
