@@ -32,7 +32,7 @@ SpectrumAnalyzerComponent::SpectrumAnalyzerComponent (SpectrumAnalyzer& a, Spect
     setOpaque (false);
     setInterceptsMouseClicks (true, true);
 
-    for (auto* button : { &preButton, &postButton, &speedButton, &smoothButton, &tiltButton })
+    for (auto* button : { &preButton, &postButton, &speedButton, &smoothButton, &tiltButton, &rangeButton, &holdButton })
     {
         setupButton (*button);
         addAndMakeVisible (*button);
@@ -50,18 +50,18 @@ SpectrumAnalyzerComponent::SpectrumAnalyzerComponent (SpectrumAnalyzer& a, Spect
 
     speedButton.onClick = [this]
     {
-        if (speedMode == SpeedMode::Fast)      speedMode = SpeedMode::Medium;
-        else if (speedMode == SpeedMode::Medium) speedMode = SpeedMode::Slow;
-        else                                  speedMode = SpeedMode::Fast;
+        if (speedMode == SpeedMode::Fast)           speedMode = SpeedMode::Medium;
+        else if (speedMode == SpeedMode::Medium)   speedMode = SpeedMode::Slow;
+        else                                       speedMode = SpeedMode::Fast;
 
         applySpeedMode();
     };
 
     smoothButton.onClick = [this]
     {
-        if (smoothMode == SmoothMode::Detailed)      smoothMode = SmoothMode::Normal;
-        else if (smoothMode == SmoothMode::Normal)   smoothMode = SmoothMode::Smooth;
-        else                                        smoothMode = SmoothMode::Detailed;
+        if (smoothMode == SmoothMode::Detailed)       smoothMode = SmoothMode::Normal;
+        else if (smoothMode == SmoothMode::Normal)    smoothMode = SmoothMode::Smooth;
+        else                                         smoothMode = SmoothMode::Detailed;
 
         applySmoothMode();
     };
@@ -72,9 +72,26 @@ SpectrumAnalyzerComponent::SpectrumAnalyzerComponent (SpectrumAnalyzer& a, Spect
         applyTiltMode();
     };
 
+    rangeButton.onClick = [this]
+    {
+        if (rangeMode == RangeMode::Full)       rangeMode = RangeMode::Mix;
+        else if (rangeMode == RangeMode::Mix)   rangeMode = RangeMode::Focus;
+        else                                   rangeMode = RangeMode::Full;
+
+        applyRangeMode();
+    };
+
+    holdButton.onClick = [this]
+    {
+        frozen = ! frozen;
+        updateButtonText();
+        repaint();
+    };
+
     applySpeedMode();
     applySmoothMode();
     applyTiltMode();
+    applyRangeMode();
     startTimerHz (30);
 }
 
@@ -121,6 +138,12 @@ void SpectrumAnalyzerComponent::updateButtonText()
     else                                         smoothButton.setButtonText ("1/12");
 
     tiltButton.setButtonText (tiltEnabled ? "TILT" : "FLAT");
+
+    if (rangeMode == RangeMode::Full)        rangeButton.setButtonText ("FULL");
+    else if (rangeMode == RangeMode::Mix)    rangeButton.setButtonText ("MIX");
+    else                                    rangeButton.setButtonText ("FOCUS");
+
+    holdButton.setButtonText (frozen ? "HELD" : "HOLD");
 }
 
 void SpectrumAnalyzerComponent::applySpeedMode()
@@ -184,8 +207,35 @@ void SpectrumAnalyzerComponent::applyTiltMode()
     updateButtonText();
 }
 
+void SpectrumAnalyzerComponent::applyRangeMode()
+{
+    if (rangeMode == RangeMode::Full)
+    {
+        pre.setDecibelRange (-100.0f, 6.0f);
+        post.setDecibelRange (-100.0f, 6.0f);
+    }
+    else if (rangeMode == RangeMode::Mix)
+    {
+        pre.setDecibelRange (-72.0f, 6.0f);
+        post.setDecibelRange (-72.0f, 6.0f);
+    }
+    else
+    {
+        pre.setDecibelRange (-48.0f, 6.0f);
+        post.setDecibelRange (-48.0f, 6.0f);
+    }
+
+    buildPath (prePath,  pre.getDisplayData());
+    buildPath (postPath, post.getDisplayData());
+    updateButtonText();
+    repaint();
+}
+
 void SpectrumAnalyzerComponent::timerCallback()
 {
+    if (frozen)
+        return;
+
     bool dirty = false;
     if (pre.processFFTIfReady())  dirty = true;
     if (post.processFFTIfReady()) dirty = true;
@@ -286,6 +336,13 @@ void SpectrumAnalyzerComponent::paint (juce::Graphics& g)
     g.setColour (juce::Colour (0xff8a8a8a));
     g.drawText ("D7S ANALYZER", 8, 6, 110, 16, juce::Justification::left, false);
 
+    if (frozen)
+    {
+        g.setFont (juce::Font (10.0f, juce::Font::bold));
+        g.setColour (juce::Colour (0xffffc857));
+        g.drawText ("HOLD", getWidth() - 50, 6, 42, 16, juce::Justification::right, false);
+    }
+
     if (showPre && ! prePath.isEmpty())
     {
         juce::Path filled = prePath;
@@ -321,13 +378,23 @@ void SpectrumAnalyzerComponent::resized()
     auto top = getLocalBounds().reduced (8, 6).removeFromTop (18);
     top.removeFromLeft (118);
 
-    const int buttonW = 48;
+    const int smallW = 48;
+    const int wideW = 54;
     const int gap = 5;
-    for (auto* button : { &preButton, &postButton, &speedButton, &smoothButton, &tiltButton })
-    {
-        button->setBounds (top.removeFromLeft (buttonW));
-        top.removeFromLeft (gap);
-    }
+
+    preButton.setBounds (top.removeFromLeft (smallW));
+    top.removeFromLeft (gap);
+    postButton.setBounds (top.removeFromLeft (smallW));
+    top.removeFromLeft (gap);
+    speedButton.setBounds (top.removeFromLeft (smallW));
+    top.removeFromLeft (gap);
+    smoothButton.setBounds (top.removeFromLeft (smallW));
+    top.removeFromLeft (gap);
+    tiltButton.setBounds (top.removeFromLeft (smallW));
+    top.removeFromLeft (gap);
+    rangeButton.setBounds (top.removeFromLeft (wideW));
+    top.removeFromLeft (gap);
+    holdButton.setBounds (top.removeFromLeft (wideW));
 
     buildPath (prePath,  pre.getDisplayData());
     buildPath (postPath, post.getDisplayData());
