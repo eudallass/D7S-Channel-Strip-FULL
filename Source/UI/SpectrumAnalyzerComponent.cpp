@@ -1,5 +1,31 @@
 #include "SpectrumAnalyzerComponent.h"
 
+namespace
+{
+    constexpr float majorFrequencies[] = { 20.0f, 50.0f, 100.0f, 200.0f, 500.0f,
+                                           1000.0f, 2000.0f, 5000.0f, 10000.0f, 20000.0f };
+
+    constexpr float minorFrequencies[] = { 30.0f, 40.0f, 60.0f, 80.0f, 300.0f, 400.0f,
+                                           600.0f, 800.0f, 3000.0f, 4000.0f, 6000.0f,
+                                           8000.0f, 12000.0f, 16000.0f };
+
+    constexpr int majorDbLines[] = { -100, -80, -60, -40, -20, 0 };
+    constexpr int minorDbLines[] = { -90, -70, -50, -30, -10 };
+
+    juce::String frequencyLabel (float hz)
+    {
+        if (hz >= 1000.0f)
+        {
+            const float k = hz / 1000.0f;
+            return juce::approximatelyEqual (std::round (k), k)
+                     ? juce::String ((int) std::round (k)) + "k"
+                     : juce::String (k, 1) + "k";
+        }
+
+        return juce::String ((int) std::round (hz));
+    }
+}
+
 SpectrumAnalyzerComponent::SpectrumAnalyzerComponent (SpectrumAnalyzer& a, SpectrumAnalyzer& b)
     : pre (a), post (b)
 {
@@ -39,8 +65,8 @@ float SpectrumAnalyzerComponent::xFromHz (float hz) const noexcept
 {
     const float logMin = std::log (post.getMinFreq());
     const float logMax = std::log (post.getMaxFreq());
-    const float t      = (std::log (juce::jlimit (post.getMinFreq(), post.getMaxFreq(), hz)) - logMin)
-                       / (logMax - logMin);
+    const float clampedHz = juce::jlimit (post.getMinFreq(), post.getMaxFreq(), hz);
+    const float t = (std::log (clampedHz) - logMin) / (logMax - logMin);
     return t * (float) getWidth();
 }
 
@@ -51,21 +77,19 @@ void SpectrumAnalyzerComponent::buildPath (juce::Path& path,
     if (getWidth() <= 0 || getHeight() <= 0)
         return;
 
-    const float w     = (float) getWidth();
-    const float minDb = post.getMinDb();
-    const float maxDb = post.getMaxDb();
-    const float h     = (float) getHeight();
+    const float logMin = std::log (post.getMinFreq());
+    const float logMax = std::log (post.getMaxFreq());
 
-    auto yFromDbLocal = [=] (float db)
-    {
-        const float norm = 1.0f - juce::jlimit (0.0f, 1.0f, (db - minDb) / (maxDb - minDb));
-        return norm * h;
-    };
-
+    // The analyzer core writes displayData in log-frequency order. Rebuilding the
+    // frequency for each scope index here keeps the curve, grid and labels tied to
+    // the same log-frequency mapping and avoids future linear/log mismatch bugs.
     for (size_t i = 0; i < data.size(); ++i)
     {
-        const float x = (float) i / (float) (data.size() - 1) * w;
-        const float y = yFromDbLocal (data[i]);
+        const float t = (float) i / (float) (data.size() - 1);
+        const float hz = std::exp (logMin + t * (logMax - logMin));
+        const float x = xFromHz (hz);
+        const float y = yFromDb (data[i]);
+
         if (i == 0) path.startNewSubPath (x, y);
         else        path.lineTo (x, y);
     }
@@ -75,28 +99,50 @@ void SpectrumAnalyzerComponent::paint (juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
 
-    g.setColour (juce::Colour (0xff141414));
+    juce::ColourGradient bg (juce::Colour (0xff111111), bounds.getTopLeft(),
+                             juce::Colour (0xff070707), bounds.getBottomRight(), false);
+    g.setGradientFill (bg);
     g.fillRect (bounds);
 
-    g.setColour (juce::Colour (0xff262626));
-    for (int db : { -80, -60, -40, -20, 0 })
+    g.setColour (juce::Colour (0xff202020));
+    g.drawRoundedRectangle (bounds.reduced (0.5f), 5.0f, 1.0f);
+
+    g.setColour (juce::Colour (0x332f2f2f));
+    for (int db : minorDbLines)
         g.drawHorizontalLine ((int) yFromDb ((float) db), bounds.getX(), bounds.getRight());
 
-    for (float hz : { 100.0f, 1000.0f, 10000.0f })
+    g.setColour (juce::Colour (0x552f2f2f));
+    for (int db : majorDbLines)
+        g.drawHorizontalLine ((int) yFromDb ((float) db), bounds.getX(), bounds.getRight());
+
+    g.setColour (juce::Colour (0x302f2f2f));
+    for (float hz : minorFrequencies)
         g.drawVerticalLine ((int) xFromHz (hz), bounds.getY(), bounds.getBottom());
 
-    g.setColour (juce::Colour (0xff5a5a5a));
-    g.setFont (juce::Font (10.0f));
-    for (int db : { -80, -60, -40, -20, 0 })
-        g.drawText (juce::String (db) + " dB", 4, (int) yFromDb ((float) db) - 10, 40, 12,
-                    juce::Justification::left, false);
+    g.setColour (juce::Colour (0x552f2f2f));
+    for (float hz : majorFrequencies)
+        g.drawVerticalLine ((int) xFromHz (hz), bounds.getY(), bounds.getBottom());
 
-    for (auto pr : std::initializer_list<std::pair<float, const char*>> {
-            { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } })
+    g.setFont (juce::Font (10.0f, juce::Font::plain));
+    g.setColour (juce::Colour (0xff777777));
+
+    for (int db : majorDbLines)
     {
-        g.drawText (pr.second, (int) xFromHz (pr.first) - 12, getHeight() - 14, 28, 12,
+        const int y = (int) yFromDb ((float) db);
+        g.drawText (juce::String (db) + " dB", 5, y - 7, 46, 14,
+                    juce::Justification::left, false);
+    }
+
+    for (float hz : majorFrequencies)
+    {
+        const int x = (int) xFromHz (hz);
+        g.drawText (frequencyLabel (hz), x - 18, getHeight() - 16, 36, 13,
                     juce::Justification::centred, false);
     }
+
+    g.setFont (juce::Font (11.0f, juce::Font::plain));
+    g.setColour (juce::Colour (0xff8a8a8a));
+    g.drawText ("D7S ANALYZER", 8, 6, 110, 16, juce::Justification::left, false);
 
     if (showPre && ! prePath.isEmpty())
     {
@@ -105,22 +151,31 @@ void SpectrumAnalyzerComponent::paint (juce::Graphics& g)
         filled.lineTo (bounds.getX(),     bounds.getBottom());
         filled.closeSubPath();
 
-        g.setColour (juce::Colour (0x33a0a0a0));
+        g.setColour (juce::Colour (0x2ea0a0a0));
         g.fillPath (filled);
 
-        g.setColour (juce::Colour (0xff707070));
-        g.strokePath (prePath, juce::PathStrokeType (1.0f));
+        g.setColour (juce::Colour (0xff747474));
+        g.strokePath (prePath, juce::PathStrokeType (1.0f,
+                                                     juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded));
     }
 
     if (showPost && ! postPath.isEmpty())
     {
+        g.setColour (juce::Colour (0x3300d4ff));
+        g.strokePath (postPath, juce::PathStrokeType (4.0f,
+                                                      juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded));
+
         g.setColour (juce::Colour (0xff00d4ff));
-        g.strokePath (postPath, juce::PathStrokeType (1.5f,
-                                                       juce::PathStrokeType::curved,
-                                                       juce::PathStrokeType::rounded));
+        g.strokePath (postPath, juce::PathStrokeType (1.6f,
+                                                      juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded));
     }
 }
 
 void SpectrumAnalyzerComponent::resized()
 {
+    buildPath (prePath,  pre.getDisplayData());
+    buildPath (postPath, post.getDisplayData());
 }
