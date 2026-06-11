@@ -62,17 +62,6 @@ void D7SChannelStripFullAudioProcessorEditor::HorizontalMeter::paint (juce::Grap
     g.fillRoundedRectangle (fill, 2.0f);
 }
 
-void D7SChannelStripFullAudioProcessorEditor::SpectrumView::paint (juce::Graphics& g)
-{
-    auto bounds = getLocalBounds().toFloat().reduced (4.0f);
-    g.setColour (juce::Colour (10, 12, 15));
-    g.fillRoundedRectangle (bounds, 5.0f);
-    g.setColour (juce::Colour (65, 72, 82));
-    g.drawRoundedRectangle (bounds, 5.0f, 1.0f);
-    g.setColour (juce::Colours::white.withAlpha (0.65f));
-    g.setFont (11.0f);
-    g.drawText ("Rack Output Spectrum", getLocalBounds().reduced (8), juce::Justification::topLeft);
-}
 
 D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor (D7SChannelStripFullAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
@@ -100,7 +89,8 @@ D7SChannelStripFullAudioProcessorEditor::D7SChannelStripFullAudioProcessorEditor
     content.addAndMakeVisible (rackMeterLabel);
     content.addAndMakeVisible (rackInMeter);
     content.addAndMakeVisible (rackOutMeter);
-    content.addAndMakeVisible (spectrumView);
+    analyzerView = std::make_unique<SpectrumAnalyzerComponent>(audioProcessor.preAnalyzer, audioProcessor.postAnalyzer);
+content.addAndMakeVisible (*analyzerView);
 
     setupSlider (noiseSuppression, "Suppression", "noisegt1_suppression");
     setupBypassButton (noiseBypassButton, "NoiseGT1 Bypass", "noisegt1_bypass", noiseBypassAttachment);
@@ -419,7 +409,7 @@ void D7SChannelStripFullAudioProcessorEditor::timerCallback()
     const auto c76 = audioProcessor.getComp76GainReductionDb(); comp76MeterLabel.setText ("GR " + juce::String (c76, 1) + " dB", juce::dontSendNotification); comp76GrMeter.setDbValue (c76, true);
     const auto c2a = audioProcessor.getComp2AGainReductionDb(); comp2aMeterLabel.setText ("GR " + juce::String (c2a, 1) + " dB", juce::dontSendNotification); comp2aGrMeter.setDbValue (c2a, true);
     const auto es = audioProcessor.getEsserGainReductionDb(); esserMeterLabel.setText ("GR " + juce::String (es, 1) + " dB", juce::dontSendNotification); esserGrMeter.setDbValue (es, true);
-    spectrumView.repaint();
+    if (analyzerView) analyzerView->repaint();
     syncChoiceButtons();
 }
 
@@ -465,7 +455,8 @@ void D7SChannelStripFullAudioProcessorEditor::resized()
     for (auto* control : { &rackInput, &rackOutput, &rackMix }) { auto group = rackControls.removeFromLeft (92); layoutKnobLocal (*control, group.removeFromTop (90)); rackControls.removeFromLeft (8); }
     auto meterArea = header.removeFromLeft (390);
     rackMeterLabel.setBounds (meterArea.removeFromTop (24)); rackInMeter.setBounds (meterArea.removeFromTop (18)); meterArea.removeFromTop (8); rackOutMeter.setBounds (meterArea.removeFromTop (18));
-    spectrumView.setBounds (header.reduced (8, 0)); area.removeFromTop (10);
+    if (analyzerView != nullptr)
+    analyzerView->setBounds (header.reduced (8, 0)); area.removeFromTop (10);
 
     auto getPanelWidth = [] (int moduleId) { switch (moduleId) { case D7SChannelStripFullAudioProcessor::moduleNoiseGT1: return 180; case D7SChannelStripFullAudioProcessor::moduleEQ4K: return 390; case D7SChannelStripFullAudioProcessor::module76: return 230; case D7SChannelStripFullAudioProcessor::module2A: return 260; case D7SChannelStripFullAudioProcessor::moduleTube: return 250; case D7SChannelStripFullAudioProcessor::moduleClipper: return 260; case D7SChannelStripFullAudioProcessor::moduleEsser: return 260; case D7SChannelStripFullAudioProcessor::moduleDelay: return 320; default: return 220; } };
     auto layoutModuleById = [&] (int moduleId, juce::Rectangle<int> panel)
