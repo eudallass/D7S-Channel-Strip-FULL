@@ -13,7 +13,7 @@
  *  - 1/24-octave smoothing in log-frequency domain (peak within band for detail).
  *  - +4.5 dB/octave tilt (Pro-Q 4 default) referenced at 1 kHz.
  *  - Configurable decay (default 30 dB/s) — instant attack, smooth fall.
- *  - Lock-free audio -> UI thread handoff via std::atomic indices.
+ *  - Lock-free audio -> UI thread handoff using complete FFT-frame snapshots.
  *  - Zero added latency to the audio path: the analyzer only observes samples.
  *  - FFT runs on the UI timer thread, NEVER on the audio thread.
  */
@@ -52,6 +52,15 @@ public:
     float getMaxDb()   const noexcept { return maxDb; }
 
 private:
+    static constexpr int numSnapshots = 4;
+    static constexpr int snapshotFree    = 0;
+    static constexpr int snapshotWriting = 1;
+    static constexpr int snapshotReady   = 2;
+    static constexpr int snapshotReading = 3;
+
+    int  acquireFreeSnapshotSlot() noexcept;
+    void buildSnapshotFromFifo() noexcept;
+    void publishSnapshot (int slot) noexcept;
     void computeFFT();
     void mapToLogScopeAndDecay();
 
@@ -62,7 +71,11 @@ private:
     std::array<float, fftSize> fifoBuffer {};
     std::atomic<int>  fifoWriteIndex      { 0 };
     std::atomic<int>  samplesSinceLastHop { 0 };
-    std::atomic<bool> nextFFTReady        { false };
+
+    std::array<std::array<float, fftSize>, numSnapshots> frameSnapshots {};
+    std::array<std::atomic<int>, numSnapshots> snapshotStates {};
+    std::atomic<int> latestReadySnapshot { -1 };
+    int nextSnapshotSearchSlot = 0;
 
     std::array<float, 2 * fftSize> fftWorkBuffer {};
     std::array<float, fftSize / 2> magnitudeSpectrum {};
