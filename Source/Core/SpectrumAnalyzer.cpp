@@ -139,8 +139,6 @@ void SpectrumAnalyzer::computeFFT()
     window.multiplyWithWindowingTable (fftWorkBuffer.data(), (size_t) fftSize);
     fft.performFrequencyOnlyForwardTransform (fftWorkBuffer.data());
 
-    // A unit sine in a real N-point FFT gives N/2. Hann coherent gain is 0.5,
-    // so the coherent-amplitude-correct scale is 4/N.
     const float scale = 4.0f / (float) fftSize;
     for (int bin = 0; bin < fftSize / 2; ++bin)
         magnitudeSpectrum[(size_t) bin] = fftWorkBuffer[(size_t) bin] * scale;
@@ -160,6 +158,9 @@ void SpectrumAnalyzer::mapToLogScopeAndDecay()
     const float binsPerHz         = (float) fftSize / (float) sampleRate;
     const int   maxBin            = fftSize / 2 - 1;
     const float invLog2           = 1.0f / std::log (2.0f);
+    const float smoothingAlpha    = temporalSmoothingMs <= 0.0f
+                                      ? 1.0f
+                                      : 1.0f - std::exp (-deltaSec / (temporalSmoothingMs * 0.001f));
 
     for (int x = 0; x < scopeSize; ++x)
     {
@@ -172,15 +173,28 @@ void SpectrumAnalyzer::mapToLogScopeAndDecay()
         const int   binHigh  = juce::jlimit (1, maxBin, (int) std::ceil  (freqHigh * binsPerHz));
 
         float peakMag = 0.0f;
-        for (int b = binLow; b <= binHigh; ++b)
-            peakMag = std::max (peakMag, magnitudeSpectrum[(size_t) b]);
+        double sumSquares = 0.0;
+        int count = 0;
 
-        float newDb = juce::Decibels::gainToDecibels (peakMag, minDb);
+        for (int b = binLow; b <= binHigh; ++b)
+        {
+            const float mag = magnitudeSpectrum[(size_t) b];
+            peakMag = std::max (peakMag, mag);
+            sumSquares += (double) mag * (double) mag;
+            ++count;
+        }
+
+        const float rmsMag = count > 0 ? std::sqrt ((float) (sumSquares / (double) count)) : 0.0f;
+        const float hybridMag = peakBlend * peakMag + (1.0f - peakBlend) * rmsMag;
+        float newDb = juce::Decibels::gainToDecibels (hybridMag, minDb);
 
         const float tiltOctaves = std::log (freq / tiltReferenceHz) * invLog2;
         newDb += tiltDbPerOctave * tiltOctaves;
 
-        const float decayed = displayData[(size_t) x] - decayThisFrame;
-        displayData[(size_t) x] = std::max (newDb, decayed);
+        const float previous = displayData[(size_t) x];
+        const float attackSmoothed = previous + smoothingAlpha * (newDb - previous);
+        const float decayed = previous - decayThisFrame;
+
+        displayData[(size_t) x] = newDb >= previous ? attackSmoothed : std::max (newDb, decayed);
     }
 }
