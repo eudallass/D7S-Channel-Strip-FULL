@@ -3,6 +3,9 @@
 SpectrumAnalyzer::SpectrumAnalyzer()
 {
     displayData.fill (minDb);
+    for (auto& state : snapshotStates)
+        state.store (snapshotFree, std::memory_order_relaxed);
+
     lastFrameTimeMs = juce::Time::currentTimeMillis();
 }
 
@@ -15,12 +18,21 @@ void SpectrumAnalyzer::prepare (double newSampleRate)
 void SpectrumAnalyzer::reset()
 {
     fifoBuffer.fill (0.0f);
+    for (auto& snapshot : frameSnapshots)
+        snapshot.fill (0.0f);
+
     fftWorkBuffer.fill (0.0f);
     magnitudeSpectrum.fill (0.0f);
     displayData.fill (minDb);
+
     fifoWriteIndex.store (0, std::memory_order_relaxed);
     samplesSinceLastHop.store (0, std::memory_order_relaxed);
-    nextFFTReady.store (false, std::memory_order_relaxed);
+    latestReadySnapshot.store (-1, std::memory_order_release);
+    nextSnapshotSearchSlot = 0;
+
+    for (auto& state : snapshotStates)
+        state.store (snapshotFree, std::memory_order_release);
+
     lastFrameTimeMs = juce::Time::currentTimeMillis();
 }
 
@@ -34,7 +46,7 @@ void SpectrumAnalyzer::pushSample (float sample) noexcept
     if (hopCount >= hopSize)
     {
         samplesSinceLastHop.store (0, std::memory_order_relaxed);
-        nextFFTReady.store (true, std::memory_order_release);
+        buildSnapshotFromFifo();
     }
 }
 
@@ -55,10 +67,66 @@ void SpectrumAnalyzer::pushBuffer (const float* L, const float* R, int n) noexce
     }
 }
 
+int SpectrumAnalyzer::acquireFreeSnapshotSlot() noexcept
+{
+    for (int attempt = 0; attempt < numSnapshots; ++attempt)
+    {
+        const int slot = (nextSnapshotSearchSlot + attempt) % numSnapshots;
+        int expected = snapshotFree;
+
+        if (snapshotStates[(size_t) slot].compare_exchange_strong (expected,
+                                                                    snapshotWriting,
+                                                                    std::memory_order_acq_rel,
+                                                                    std::memory_order_relaxed))
+        {
+            nextSnapshotSearchSlot = (slot + 1) % numSnapshots;
+            return slot;
+        }
+    }
+
+    return -1;
+}
+
+void SpectrumAnalyzer::buildSnapshotFromFifo() noexcept
+{
+    const int slot = acquireFreeSnapshotSlot();
+    if (slot < 0)
+        return;
+
+    const int writeIdx = fifoWriteIndex.load (std::memory_order_acquire);
+    auto& snapshot = frameSnapshots[(size_t) slot];
+
+    for (int i = 0; i < fftSize; ++i)
+    {
+        const int readIdx = (writeIdx + i) % fftSize;
+        snapshot[(size_t) i] = fifoBuffer[(size_t) readIdx];
+    }
+
+    publishSnapshot (slot);
+}
+
+void SpectrumAnalyzer::publishSnapshot (int slot) noexcept
+{
+    snapshotStates[(size_t) slot].store (snapshotReady, std::memory_order_release);
+
+    const int previousReady = latestReadySnapshot.exchange (slot, std::memory_order_acq_rel);
+    if (previousReady >= 0 && previousReady != slot)
+        snapshotStates[(size_t) previousReady].store (snapshotFree, std::memory_order_release);
+}
+
 bool SpectrumAnalyzer::processFFTIfReady()
 {
-    if (! nextFFTReady.exchange (false, std::memory_order_acquire))
+    const int slot = latestReadySnapshot.exchange (-1, std::memory_order_acq_rel);
+    if (slot < 0)
         return false;
+
+    snapshotStates[(size_t) slot].store (snapshotReading, std::memory_order_release);
+
+    const auto& snapshot = frameSnapshots[(size_t) slot];
+    for (int i = 0; i < fftSize; ++i)
+        fftWorkBuffer[(size_t) i] = snapshot[(size_t) i];
+
+    snapshotStates[(size_t) slot].store (snapshotFree, std::memory_order_release);
 
     computeFFT();
     mapToLogScopeAndDecay();
@@ -67,14 +135,6 @@ bool SpectrumAnalyzer::processFFTIfReady()
 
 void SpectrumAnalyzer::computeFFT()
 {
-    const int writeIdx = fifoWriteIndex.load (std::memory_order_relaxed);
-
-    for (int i = 0; i < fftSize; ++i)
-    {
-        const int readIdx = (writeIdx + i) % fftSize;
-        fftWorkBuffer[(size_t) i] = fifoBuffer[(size_t) readIdx];
-    }
-
     std::fill (fftWorkBuffer.begin() + fftSize, fftWorkBuffer.end(), 0.0f);
     window.multiplyWithWindowingTable (fftWorkBuffer.data(), (size_t) fftSize);
     fft.performFrequencyOnlyForwardTransform (fftWorkBuffer.data());
